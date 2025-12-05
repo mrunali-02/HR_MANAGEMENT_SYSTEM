@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import './AdminDashboard.css';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -38,6 +51,17 @@ function AdminDashboard() {
     joined_on: '',
     address: '',
     contact_number: '',
+  });
+
+  // ✅ Settings state moved to top-level (not inside renderSettings)
+  const [profileInfo, setProfileInfo] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+  });
+
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
   });
 
   useEffect(() => {
@@ -322,11 +346,9 @@ function AdminDashboard() {
         <button
           onClick={() => {
             if (showAddForm && !selectedEmployee) {
-              // closing create form
               setShowAddForm(false);
               resetForm();
             } else {
-              // open as create form
               setSelectedEmployee(null);
               resetForm();
               setShowAddForm(true);
@@ -350,7 +372,7 @@ function AdminDashboard() {
         </div>
       )}
 
-          {showAddForm && (
+      {showAddForm && (
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium mb-4">
             {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
@@ -513,7 +535,6 @@ function AdminDashboard() {
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                     {u.employee_id || '-'}
                   </td>
-
                   <td
                     className="px-4 py-2 whitespace-nowrap text-sm text-indigo-600 cursor-pointer hover:underline"
                     onClick={() => handleEditClick(u)}
@@ -568,7 +589,7 @@ function AdminDashboard() {
   const renderLeaveApplications = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Leave Applications</h2>
-      
+
       {error && (
         <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
           {error}
@@ -674,80 +695,211 @@ function AdminDashboard() {
     </div>
   );
 
-  const renderReports = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Charts</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-2">Employees by Role</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Simple distribution of employees across different roles.
-          </p>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span>Employees</span>
-              <span className="font-semibold">{totalEmployees}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Managers</span>
-              <span className="font-semibold">{totalManagers}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>HR</span>
-              <span className="font-semibold">{totalHr}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Admins</span>
-              <span className="font-semibold">{totalAdmins}</span>
-            </div>
+  const renderReports = () => {
+    // employees by role
+    const employeeCount = users.filter((u) => u.role === 'employee').length;
+    const managerCount = totalManagers;
+    const hrCount = totalHr;
+    const adminCount = totalAdmins;
+
+    const roleData = [
+      { name: 'Employee', value: employeeCount },
+      { name: 'Manager', value: managerCount },
+      { name: 'HR', value: hrCount },
+      { name: 'Admin', value: adminCount },
+    ].filter((item) => item.value > 0);
+
+    // leaves by status
+    const pendingLeaves = leaveApplications.filter((la) => la.status === 'pending').length;
+    const approvedLeaves = leaveApplications.filter((la) => la.status === 'approved').length;
+    const rejectedLeaves = leaveApplications.filter((la) => la.status === 'rejected').length;
+
+    const leaveStatusData = [
+      { name: 'Pending', value: pendingLeaves },
+      { name: 'Approved', value: approvedLeaves },
+      { name: 'Rejected', value: rejectedLeaves },
+    ];
+
+    const PIE_COLORS = ['#3b82f6', '#22c55e', '#eab308', '#ef4444']; // blue, green, yellow, red
+    const BAR_COLORS = ['#22c55e', '#3b82f6', '#ef4444']; // green, blue, red
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Charts</h2>
+
+        {/* Summary stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <p className="text-sm text-gray-500">Total Users</p>
+            <p className="text-2xl font-bold text-gray-900">{totalEmployees}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <p className="text-sm text-gray-500">Employees</p>
+            <p className="text-2xl font-bold text-gray-900">{employeeCount}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <p className="text-sm text-gray-500">Managers</p>
+            <p className="text-2xl font-bold text-gray-900">{managerCount}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <p className="text-sm text-gray-500">HR & Admin</p>
+            <p className="text-2xl font-bold text-gray-900">{hrCount + adminCount}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-2">Activity Summary</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Placeholder for more advanced charts (e.g., attendance, leaves). You can integrate a
-            chart library like Recharts or Chart.js here.
-          </p>
-          <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg text-gray-400 text-sm">
-            Charts area (to be implemented)
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Pie chart - employees by role */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-2">Employees by Role</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Distribution of users across different roles.
+            </p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={roleData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={90}
+                    label
+                  >
+                    {roleData.map((entry, index) => (
+                      <Cell
+                        key={`role-cell-${index}`}
+                        fill={PIE_COLORS[index % PIE_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Bar chart - leaves by status */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold mb-2">Leave Requests by Status</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Overview of all leave applications handled by the system.
+            </p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={leaveStatusData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value">
+                    {leaveStatusData.map((entry, index) => (
+                      <Cell
+                        key={`leave-cell-${index}`}
+                        fill={BAR_COLORS[index % BAR_COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
+  // ✅ Settings renderer now pure (no hooks)
   const renderSettings = () => (
     <div className="space-y-6 max-w-2xl">
-      <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-      <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
-        <div>
-          <h3 className="text-lg font-semibold mb-2">Admin Profile</h3>
-          <div className="space-y-1 text-sm text-gray-700">
-            <p>
-              <span className="font-medium">Name:</span> {user?.name || 'Not set'}
-            </p>
-            <p>
-              <span className="font-medium">Email:</span> {user?.email}
-            </p>
-            <p>
-              <span className="font-medium">Role:</span> {user?.role}
-            </p>
-          </div>
-        </div>
-        <div className="border-t pt-4">
-          <h3 className="text-lg font-semibold mb-2">Account Settings</h3>
-          <p className="text-sm text-gray-500 mb-3">
-            This section can be extended to allow changing password, email, and other
-            configuration options.
-          </p>
-          <button
-            type="button"
-            className="px-4 py-2 rounded-md bg-gray-100 text-sm text-gray-600 cursor-not-allowed"
-          >
-            Manage Settings (Coming Soon)
-          </button>
-        </div>
+      <h2 className="text-2xl font-bold text-gray-900">Account Settings</h2>
+
+      {/* Profile Update */}
+      <div className="bg-white rounded-xl shadow p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Profile Details</h3>
+
+        <input
+          type="text"
+          className="w-full border rounded p-2"
+          value={profileInfo.name}
+          onChange={(e) => setProfileInfo({ ...profileInfo, name: e.target.value })}
+          placeholder="Your Name"
+        />
+
+        <input
+          type="email"
+          className="w-full border rounded p-2"
+          value={profileInfo.email}
+          onChange={(e) => setProfileInfo({ ...profileInfo, email: e.target.value })}
+          placeholder="Your Email"
+        />
+
+        <button
+          onClick={async () => {
+            try {
+              const token = localStorage.getItem('token');
+              await axios.put(
+                `${API_BASE_URL}/admin/profile/update`,
+                profileInfo,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              alert('Profile updated!');
+            } catch (err) {
+              alert(err.response?.data?.error || 'Failed to update');
+            }
+          }}
+          className="bg-indigo-600 text-white px-4 py-2 rounded"
+        >
+          Save Profile
+        </button>
+      </div>
+
+      {/* Password Change */}
+      <div className="bg-white rounded-xl shadow p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
+
+        <input
+          type="password"
+          className="w-full border rounded p-2"
+          placeholder="Current Password"
+          value={passwordData.currentPassword}
+          onChange={(e) =>
+            setPasswordData({ ...passwordData, currentPassword: e.target.value })
+          }
+        />
+
+        <input
+          type="password"
+          className="w-full border rounded p-2"
+          placeholder="New Password"
+          value={passwordData.newPassword}
+          onChange={(e) =>
+            setPasswordData({ ...passwordData, newPassword: e.target.value })
+          }
+        />
+
+        <button
+          onClick={async () => {
+            if (!passwordData.currentPassword || !passwordData.newPassword) {
+              return alert('Fill both fields');
+            }
+            try {
+              const token = localStorage.getItem('token');
+              await axios.put(
+                `${API_BASE_URL}/admin/profile/change-password`,
+                passwordData,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              alert('Password updated');
+              setPasswordData({ currentPassword: '', newPassword: '' });
+            } catch (err) {
+              alert(err.response?.data?.error || 'Failed to change password');
+            }
+          }}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Update Password
+        </button>
       </div>
     </div>
   );
@@ -861,4 +1013,3 @@ function AdminDashboard() {
 }
 
 export default AdminDashboard;
-
