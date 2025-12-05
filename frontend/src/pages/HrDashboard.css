@@ -1,0 +1,340 @@
+/* ==========================================
+   HrDashboard.css - Professional Enterprise Theme
+   Clean, Minimalist, Data-Focused
+   ========================================== */
+
+   :root {
+    --hr-bg: #f8fafc;            /* Slate-50: Clean background */
+    --hr-surface: #ffffff;       /* White surface */
+    --hr-border: #e2e8f0;        /* Slate-200: Subtle borders */
+    --hr-primary: #4f46e5;       /* Indigo-600: Primary Action Color */
+    --hr-text-main: #0f172a;     /* Slate-900: Headings */
+    --hr-text-body: #334155;     /* Slate-700: Body text */
+    --hr-text-muted: #64748b;    /* Slate-500: Meta text */
+    
+    --radius: 10px;              /* Moderate rounding */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  
+  /* ------------- LAYOUT ------------- */
+  
+  .min-h-screen {
+    background: var(--hr-bg) !important;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--hr-text-body);
+  }
+  
+  /* Remove the previous gradient background animation */
+  .min-h-screen::before {
+    display: none;
+  }
+  
+  /* ===== SIDEBAR ===== */
+  
+  aside {
+    background: var(--hr-surface) !important;
+    border-right: 1px solid var(--hr-border);
+    box-shadow: none !important;
+    z-index: 10;
+  }
+  
+  /* Sidebar Header */
+  aside .h-16 {
+    background: var(--hr-surface) !important;
+    border-bottom: 1px solid var(--hr-border) !important;
+    color: var(--hr-primary) !important;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-transform: none !important; /* Sentence case is more modern */
+  }
+  
+  /* Remove decorative sidebar bar */
+  aside::before { display: none; }
+  
+  /* Nav Links */
+  aside nav button {
+    color: var(--hr-text-muted) !important;
+    font-weight: 500;
+    font-size: 0.875rem;
+    background: transparent !important;
+    border: 1px solid transparent;
+    margin: 4px 12px;
+    padding: 10px 16px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+  
+  aside nav button:hover {
+    background: #f1f5f9 !important; /* Slate-100 */
+    color: var(--hr-text-main) !important;
+    transform: none !important;
+  }
+  
+  /* Active Link */
+  aside nav button.bg-slate-800 {
+    background: #eef2ff !important; /* Light Indigo */
+    color: var(--hr-primary) !important;
+    border-color: #e0e7ff;
+    font-weight: 600;
+    box-shadow: none !important;
+  }
+  
+  /* Logout Section */
+/* Logout Section Container */
+aside .p-4.border-t {
+    border-top: 1px solid var(--hr-border) !important;
+    padding-top: 1rem !important;
+    margin-top: auto;
+  }
+  
+  /* Logout Button */
+  aside button.bg-red-600 {
+    background: #ffffff !important;
+    border: 1px solid #fee2e2 !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease;
+  }
+  
+  /* Hover State */
+  aside button.bg-red-600:hover {
+    background: #faecec !important;
+    border-color: #fca5a5 !important;
+    transform: translateY(-1px);
+  }
+  
+  aside button.bg-red-600 {
+    background: white !important;
+    border: 1px solid #fee2e2;
+    color: #f5f5f5 !important; /* Red Text */
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+  }
+  
+  aside button.bg-red-600:hover {
+    background: #d31515 !important; /* Red-50 */
+    border-color: #fca5a5;
+    transform: none !important;
+  }
+  
+  /* ===== MAIN CONTENT ===== */
+  
+  main.flex-1 {
+    background: var(--hr-bg);
+    padding: 2rem !important;
+    backdrop-filter: none;
+  }
+  
+  /* Titles */
+  h2.text-2xl {
+    color: var(--hr-text-main);
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.025em;
+    background: none !important;
+    -webkit-text-fill-color: initial !important;
+  }
+  
+  /* ------------- STAT CARDS ------------- */
+  
+  /* The JSX uses utility classes like .bg-indigo-600. 
+     We override these to create clean white cards with colored accent borders.
+  */
+  
+  .bg-indigo-600, .bg-emerald-600, .bg-sky-600, 
+  .bg-blue-600, .bg-amber-500, .bg-yellow-500, 
+  .bg-green-600, .bg-red-600 {
+    background: var(--hr-surface) !important;
+    border: 1px solid var(--hr-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 1.5rem !important;
+    color: var(--hr-text-main) !important;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  /* Hover Effect */
+  .bg-indigo-600:hover, .bg-emerald-600:hover, .bg-sky-600:hover,
+  .bg-blue-600:hover, .bg-amber-500:hover, .bg-yellow-500:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  
+  /* Colored Accents (Left Border) */
+  .bg-indigo-600 { border-left: 4px solid #6366f1 !important; }
+  .bg-emerald-600 { border-left: 4px solid #10b981 !important; }
+  .bg-sky-600    { border-left: 4px solid #0ea5e9 !important; }
+  .bg-blue-600   { border-left: 4px solid #3b82f6 !important; }
+  .bg-amber-500  { border-left: 4px solid #f59e0b !important; }
+  .bg-yellow-500 { border-left: 4px solid #eab308 !important; }
+  .bg-green-600  { border-left: 4px solid #22c55e !important; }
+  .bg-red-600    { border-left: 4px solid #ef4444 !important; }
+  
+  /* Remove Shimmer */
+  .text-white::after, .text-white::before { display: none !important; }
+  
+  /* Typography inside cards */
+  .text-white .text-3xl {
+    color: var(--hr-text-main);
+    font-weight: 700;
+  }
+  
+  .text-white .opacity-80 {
+    color: var(--hr-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 1 !important;
+  }
+  
+  /* ------------- TABLES & LISTS ------------- */
+  
+  /* Container for Tables */
+  .bg-white.shadow, .bg-white.rounded-lg {
+    background: var(--hr-surface) !important;
+    border: 1px solid var(--hr-border);
+    box-shadow: var(--shadow-sm) !important;
+    border-radius: var(--radius);
+  }
+  
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  
+  /* Table Header */
+  thead.bg-gray-50 {
+    background: #f8fafc !important;
+  }
+  
+  th {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: var(--hr-text-muted);
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--hr-border);
+  }
+  
+  /* Table Body */
+  td {
+    padding: 1rem 1.5rem;
+    color: var(--hr-text-body);
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--hr-border);
+  }
+  
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  
+  tbody tr:hover {
+    background: #f8fafc !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Action Buttons (Table) */
+  button.text-red-600 {
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: white;
+    border: 1px solid #fee2e2;
+    transition: 0.2s;
+  }
+  
+  button.text-red-600:hover {
+    background: #fef2f2;
+    color: #dc2626;
+    box-shadow: none;
+  }
+  
+  /* ------------- LEAVE APPLICATIONS ------------- */
+  
+  /* Leave Card Item */
+  .border.bg-white.shadow.p-4.rounded {
+    background: var(--hr-surface) !important;
+    border: 1px solid var(--hr-border) !important;
+    box-shadow: var(--shadow-sm) !important;
+    border-radius: 8px !important;
+    margin-bottom: 0.75rem;
+  }
+  
+  .border.bg-white.shadow.p-4.rounded:hover {
+    border-color: #cbd5e1 !important;
+    transform: none !important;
+  }
+  
+  /* Action Buttons (Approve/Reject) */
+  .flex.gap-2 button {
+    font-weight: 500;
+    font-size: 0.8rem;
+    padding: 6px 16px;
+    border-radius: 6px;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  
+  /* Approve */
+  button.bg-green-600 {
+    background: white !important;
+    border: 1px solid #bbf7d0;
+    color: #16a34a !important;
+  }
+  button.bg-green-600:hover {
+    background: #f0fdf4 !important;
+  }
+  
+  /* Reject */
+  button.bg-red-600 {
+    background: white !important;
+    border: 1px solid #fecaca;
+    color: #dc2626 !important;
+  }
+  button.bg-red-600:hover {
+    background: #fef2f2 !important;
+  }
+  
+  /* Status Badge */
+  span.text-gray-500 {
+    background: #f1f5f9;
+    color: var(--hr-text-body);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    border: 1px solid var(--hr-border);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  
+  /* ------------- CHARTS ------------- */
+  
+  /* Chart Containers */
+  .bg-white.p-6 {
+    background: var(--hr-surface) !important;
+    border: 1px solid var(--hr-border);
+    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius);
+  }
+  
+  /* Customize Recharts Tooltip via CSS override */
+  .recharts-default-tooltip {
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-md) !important;
+    border: 1px solid var(--hr-border) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+  }
+  
+  /* ------------- LOADING ------------- */
+  
+  .flex.items-center.justify-center.min-h-screen {
+    background: var(--hr-bg);
+    color: var(--hr-text-muted);
+  }
