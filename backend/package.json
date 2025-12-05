@@ -1,0 +1,29 @@
+{
+  "name": "hr-management-backend",
+  "version": "1.0.0",
+  "description": "HR Management System Backend",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "node src/migrations/migrate.js",
+    "setup-db": "node scripts/setup-database.js"
+  },
+  "keywords": ["hr", "management", "api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.6.5",
+    "bcrypt": "^5.1.1",
+    "uuid": "^9.0.1",
+    "dotenv": "^16.3.1",
+    "express-rate-limit": "^7.1.5",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
+
