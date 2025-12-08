@@ -5,7 +5,9 @@ import {
   getLeaveRequests,
   approveLeaveRequest,
   rejectLeaveRequest,
-  getHrAnalytics
+  getHrAnalytics,
+  getManagers,
+  assignManager
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -17,6 +19,8 @@ router.use(authToken);
 router.use(requireRole('hr', 'admin')); // HR + admin can view analytics
 
 router.get('/users', getUsers);
+router.get('/managers', getManagers);
+router.put('/employees/:employeeId/assign-manager', assignManager);
 router.delete('/users/:id', deleteUser);
 router.get('/leave-requests', getLeaveRequests);
 router.put('/leave-requests/:id/approve', approveLeaveRequest);

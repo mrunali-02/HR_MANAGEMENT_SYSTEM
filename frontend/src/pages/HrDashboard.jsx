@@ -36,8 +36,10 @@ function HrDashboard() {
 
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
   const [users, setUsers] = useState([]);
+  const [managers, setManagers] = useState([]);
   const [leaveApplications, setLeaveApplications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [assigningManager, setAssigningManager] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +50,7 @@ function HrDashboard() {
       navigate('/login');
       return;
     }
-    Promise.all([fetchUsers(), fetchLeaveApplications()]).finally(() => {
+    Promise.all([fetchUsers(), fetchManagers(), fetchLeaveApplications()]).finally(() => {
       setLoading(false);
     });
   }, [user, navigate]);
@@ -72,6 +74,21 @@ function HrDashboard() {
     } catch (err) {
       console.error('Error fetching users:', err);
       setError(err.response?.data?.error || 'Failed to fetch users');
+    }
+  };
+
+  const fetchManagers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/hr/managers`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setManagers(response.data.managers || []);
+    } catch (err) {
+      console.error('Error fetching managers:', err);
+      // Don't set error, just log it
     }
   };
 
@@ -143,14 +160,44 @@ function HrDashboard() {
     if (!window.confirm('Confirm deletion?')) return;
 
     try {
+      setError('');
+      setSuccess('');
       const token = localStorage.getItem('token');
       await axios.delete(`${API_BASE_URL}/hr/users/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSuccess('User deleted successfully!');
       fetchUsers();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete user');
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
+  const handleAssignManager = async (employeeId, managerId) => {
+    try {
+      setAssigningManager(prev => ({ ...prev, [employeeId]: true }));
+      setError('');
+      setSuccess('');
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_BASE_URL}/hr/employees/${employeeId}/assign-manager`,
+        { managerId: managerId || null },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setSuccess('Manager assigned successfully!');
+      fetchUsers(); // Refresh the list
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to assign manager');
+      // Clear error message after 5 seconds
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setAssigningManager(prev => ({ ...prev, [employeeId]: false }));
     }
   };
 
@@ -186,17 +233,19 @@ function HrDashboard() {
   const renderEmployeeList = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Employee List</h2>
-      {error && <div className="bg-red-100 text-red-700 px-4 py-2">{error}</div>}
-      {success && <div className="bg-green-100 text-green-700 px-4 py-2">{success}</div>}
+      {error && <div className="bg-red-100 text-red-700 px-4 py-2 rounded">{error}</div>}
+      {success && <div className="bg-green-100 text-green-700 px-4 py-2 rounded">{success}</div>}
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Role</th>
-              <th className="px-4 py-2">Joined</th>
+              <th className="px-4 py-2 text-left">Name</th>
+              <th className="px-4 py-2 text-left">Email</th>
+              <th className="px-4 py-2 text-left">Role</th>
+              <th className="px-4 py-2 text-left">Manager</th>
+              <th className="px-4 py-2 text-left">Assign Manager</th>
+              <th className="px-4 py-2 text-left">Joined</th>
               <th className="px-4 py-2 text-right">Actions</th>
             </tr>
           </thead>
@@ -206,6 +255,33 @@ function HrDashboard() {
                 <td className="px-4 py-2">{u.name || u.email}</td>
                 <td className="px-4 py-2">{u.email}</td>
                 <td className="px-4 py-2 capitalize">{u.role}</td>
+                <td className="px-4 py-2">
+                  {u.manager_name ? (
+                    <span className="text-sm text-gray-700">{u.manager_name}</span>
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">No manager</span>
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  {u.role === 'employee' && (
+                    <select
+                      value={u.manager_id || ''}
+                      onChange={(e) => handleAssignManager(u.id, e.target.value || null)}
+                      disabled={assigningManager[u.id]}
+                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">-- No Manager --</option>
+                      {managers.map((manager) => (
+                        <option key={manager.id} value={manager.id}>
+                          {manager.name || manager.email}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {u.role !== 'employee' && (
+                    <span className="text-sm text-gray-400">-</span>
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   {u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}
                 </td>
@@ -223,7 +299,7 @@ function HrDashboard() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-center" colSpan={5}>
+                <td className="px-4 py-4 text-center" colSpan={7}>
                   No employees found.
                 </td>
               </tr>

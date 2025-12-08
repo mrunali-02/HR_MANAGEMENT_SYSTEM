@@ -2,6 +2,7 @@
 import db from '../db/db.js';
 import { comparePassword, hashPassword } from '../utils/hash.js';
 import { generateToken, getExpiryDate } from '../utils/token.js';
+import { logAudit, createNotification } from '../utils/audit.js';
 
 /* ======================
       ADMIN LOGIN
@@ -85,6 +86,14 @@ export async function addEmployee(req, res) {
 
     await db.execute('INSERT INTO profiles (user_id, display_name) VALUES (?, ?)', [result.insertId, name || email]);
 
+    // Audit log
+    await logAudit(req.user?.id || null, 'employee_added', {
+      employee_id: result.insertId,
+      email,
+      role,
+      employee_code: employee_id || null
+    });
+
     res.status(201).json({ id: result.insertId, email, role, name: name || null });
 
   } catch (error) {
@@ -95,13 +104,99 @@ export async function addEmployee(req, res) {
 export async function getUsers(req, res) {
   try {
     const [users] = await db.execute(`
-      SELECT id, employee_id, email, name, role, department, phone, joined_on, address, contact_number, created_at 
-      FROM employees ORDER BY created_at DESC
+      SELECT 
+        e.id, 
+        e.employee_id, 
+        e.email, 
+        e.name, 
+        e.role, 
+        e.department, 
+        e.phone, 
+        e.joined_on, 
+        e.address, 
+        e.contact_number, 
+        e.manager_id,
+        e.created_at,
+        m.name AS manager_name,
+        m.email AS manager_email
+      FROM employees e
+      LEFT JOIN employees m ON e.manager_id = m.id
+      ORDER BY e.created_at DESC
     `);
 
     res.json({ users });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch users' });
+  }
+}
+
+export async function getManagers(req, res) {
+  try {
+    const [managers] = await db.execute(`
+      SELECT id, name, email, role
+      FROM employees 
+      WHERE role = 'manager'
+      ORDER BY name ASC
+    `);
+
+    res.json({ managers });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch managers' });
+  }
+}
+
+export async function assignManager(req, res) {
+  try {
+    const { employeeId } = req.params;
+    const { managerId } = req.body; // Can be null to unassign
+
+    // Verify employee exists
+    const [employee] = await db.execute(
+      'SELECT id, role FROM employees WHERE id = ?',
+      [employeeId]
+    );
+
+    if (employee.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Don't allow assigning manager to admin or hr
+    if (['admin', 'hr'].includes(employee[0].role)) {
+      return res.status(400).json({ error: 'Cannot assign manager to admin or HR' });
+    }
+
+    // If managerId is provided, verify it's a valid manager
+    if (managerId) {
+      const [manager] = await db.execute(
+        'SELECT id, role FROM employees WHERE id = ? AND role = ?',
+        [managerId, 'manager']
+      );
+
+      if (manager.length === 0) {
+        return res.status(404).json({ error: 'Manager not found' });
+      }
+
+      // Don't allow assigning manager to themselves
+      if (parseInt(employeeId) === parseInt(managerId)) {
+        return res.status(400).json({ error: 'Employee cannot be their own manager' });
+      }
+    }
+
+    // Update manager_id
+    await db.execute(
+      'UPDATE employees SET manager_id = ? WHERE id = ?',
+      [managerId || null, employeeId]
+    );
+
+    await logAudit(req.user.id, 'manager_assigned', {
+      employee_id: employeeId,
+      manager_id: managerId || null
+    });
+
+    res.json({ message: 'Manager assigned successfully' });
+  } catch (error) {
+    console.error('Assign manager error:', error);
+    res.status(500).json({ error: 'Failed to assign manager' });
   }
 }
 
@@ -138,6 +233,9 @@ export async function deleteUser(req, res) {
     await db.execute('DELETE FROM api_tokens WHERE user_id = ?', [id]);
     await db.execute('DELETE FROM profiles WHERE user_id = ?', [id]);
     await db.execute('DELETE FROM employees WHERE id = ?', [id]);
+
+    // Audit log
+    await logAudit(req.user?.id || null, 'employee_deleted', { employee_id: parseInt(id, 10) });
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -258,8 +356,403 @@ export async function changeAdminPassword(req, res) {
       [newHash, adminId]
     );
 
+    await logAudit(req.user.id, 'password_changed', { admin_id: adminId });
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to change password' });
+  }
+}
+
+/* ======================
+     DEPARTMENTS MANAGEMENT
+====================== */
+export async function getDepartments(req, res) {
+  try {
+    const [departments] = await db.execute(
+      'SELECT id, name, description, created_at FROM departments ORDER BY name ASC'
+    );
+    res.json({ departments });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+}
+
+export async function createDepartment(req, res) {
+  try {
+    const { name, description } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Department name is required' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO departments (name, description) VALUES (?, ?)',
+      [name, description || null]
+    );
+
+    await logAudit(req.user.id, 'department_created', { department_id: result.insertId, name });
+    res.status(201).json({ id: result.insertId, name, description });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Department name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create department' });
+  }
+}
+
+export async function updateDepartment(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+
+    await db.execute(
+      'UPDATE departments SET name = ?, description = ? WHERE id = ?',
+      [name, description || null, id]
+    );
+
+    await logAudit(req.user.id, 'department_updated', { department_id: id, name });
+    res.json({ message: 'Department updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update department' });
+  }
+}
+
+export async function deleteDepartment(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Check if any employees are using this department
+    const [employees] = await db.execute(
+      'SELECT COUNT(*) AS count FROM employees WHERE department = (SELECT name FROM departments WHERE id = ?)',
+      [id]
+    );
+
+    if (employees[0].count > 0) {
+      return res.status(400).json({ error: 'Cannot delete department with assigned employees' });
+    }
+
+    await db.execute('DELETE FROM departments WHERE id = ?', [id]);
+    await logAudit(req.user.id, 'department_deleted', { department_id: id });
+    res.json({ message: 'Department deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete department' });
+  }
+}
+
+/* ======================
+     HOLIDAYS MANAGEMENT
+====================== */
+export async function getHolidays(req, res) {
+  try {
+    const [holidays] = await db.execute(
+      'SELECT id, name, holiday_date, description, created_at FROM holidays ORDER BY holiday_date ASC'
+    );
+    res.json({ holidays });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch holidays' });
+  }
+}
+
+export async function createHoliday(req, res) {
+  try {
+    const { name, holiday_date, description } = req.body;
+    if (!name || !holiday_date) {
+      return res.status(400).json({ error: 'Holiday name and date are required' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO holidays (name, holiday_date, description) VALUES (?, ?, ?)',
+      [name, holiday_date, description || null]
+    );
+
+    await logAudit(req.user.id, 'holiday_created', { holiday_id: result.insertId, name, date: holiday_date });
+    await createNotification(null, `New holiday added: ${name} on ${holiday_date}`);
+    res.status(201).json({ id: result.insertId, name, holiday_date, description });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Holiday for this date already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create holiday' });
+  }
+}
+
+export async function updateHoliday(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, holiday_date, description } = req.body;
+
+    await db.execute(
+      'UPDATE holidays SET name = ?, holiday_date = ?, description = ? WHERE id = ?',
+      [name, holiday_date, description || null, id]
+    );
+
+    await logAudit(req.user.id, 'holiday_updated', { holiday_id: id, name });
+    res.json({ message: 'Holiday updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update holiday' });
+  }
+}
+
+export async function deleteHoliday(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute('DELETE FROM holidays WHERE id = ?', [id]);
+    await logAudit(req.user.id, 'holiday_deleted', { holiday_id: id });
+    res.json({ message: 'Holiday deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete holiday' });
+  }
+}
+
+/* ======================
+     LEAVE POLICIES MANAGEMENT
+====================== */
+export async function getLeavePolicies(req, res) {
+  try {
+    const [policies] = await db.execute(
+      'SELECT id, name, type, total_days, carry_forward, created_at FROM leave_policies ORDER BY type ASC'
+    );
+    res.json({ policies });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch leave policies' });
+  }
+}
+
+export async function createLeavePolicy(req, res) {
+  try {
+    const { name, type, total_days, carry_forward } = req.body;
+    if (!name || !type || total_days === undefined) {
+      return res.status(400).json({ error: 'Policy name, type, and total_days are required' });
+    }
+
+    if (!['sick', 'casual', 'paid', 'emergency'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid leave type' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO leave_policies (name, type, total_days, carry_forward) VALUES (?, ?, ?, ?)',
+      [name, type, total_days, carry_forward ? 1 : 0]
+    );
+
+    await logAudit(req.user.id, 'leave_policy_created', { policy_id: result.insertId, type, total_days });
+    res.status(201).json({ id: result.insertId, name, type, total_days, carry_forward: !!carry_forward });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create leave policy' });
+  }
+}
+
+export async function updateLeavePolicy(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, type, total_days, carry_forward } = req.body;
+
+    await db.execute(
+      'UPDATE leave_policies SET name = ?, type = ?, total_days = ?, carry_forward = ? WHERE id = ?',
+      [name, type, total_days, carry_forward ? 1 : 0, id]
+    );
+
+    await logAudit(req.user.id, 'leave_policy_updated', { policy_id: id, type });
+    res.json({ message: 'Leave policy updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update leave policy' });
+  }
+}
+
+export async function deleteLeavePolicy(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute('DELETE FROM leave_policies WHERE id = ?', [id]);
+    await logAudit(req.user.id, 'leave_policy_deleted', { policy_id: id });
+    res.json({ message: 'Leave policy deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete leave policy' });
+  }
+}
+
+/* ======================
+     ATTENDANCE CORRECTIONS MANAGEMENT
+====================== */
+export async function getAttendanceCorrections(req, res) {
+  try {
+    const [corrections] = await db.execute(`
+      SELECT 
+        ac.id, ac.attendance_id, ac.user_id, ac.correction_type, ac.reason, 
+        ac.status, ac.reviewed_by, ac.created_at,
+        e.name AS employee_name, e.email AS employee_email,
+        a.attendance_date, a.status AS original_status
+      FROM attendance_corrections ac
+      JOIN employees e ON ac.user_id = e.id
+      JOIN attendance a ON ac.attendance_id = a.id
+      ORDER BY ac.created_at DESC
+    `);
+    res.json({ corrections });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch attendance corrections' });
+  }
+}
+
+export async function approveAttendanceCorrection(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Get correction details
+    const [corrections] = await db.execute(
+      'SELECT attendance_id, correction_type FROM attendance_corrections WHERE id = ? AND status = ?',
+      [id, 'pending']
+    );
+
+    if (corrections.length === 0) {
+      return res.status(404).json({ error: 'Correction not found or already processed' });
+    }
+
+    const correction = corrections[0];
+
+    // Update attendance based on correction type
+    if (correction.correction_type === 'status_change') {
+      // This would need additional data from request body
+      const { new_status } = req.body;
+      await db.execute(
+        'UPDATE attendance SET status = ? WHERE id = ?',
+        [new_status, correction.attendance_id]
+      );
+    }
+
+    // Update correction status
+    await db.execute(
+      'UPDATE attendance_corrections SET status = ?, reviewed_by = ? WHERE id = ?',
+      ['approved', req.user.id, id]
+    );
+
+    await logAudit(req.user.id, 'attendance_correction_approved', { correction_id: id });
+    res.json({ message: 'Attendance correction approved' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve attendance correction' });
+  }
+}
+
+export async function rejectAttendanceCorrection(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute(
+      'UPDATE attendance_corrections SET status = ?, reviewed_by = ? WHERE id = ?',
+      ['rejected', req.user.id, id]
+    );
+
+    await logAudit(req.user.id, 'attendance_correction_rejected', { correction_id: id });
+    res.json({ message: 'Attendance correction rejected' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject attendance correction' });
+  }
+}
+
+/* ======================
+     OVERTIMES MANAGEMENT
+====================== */
+export async function getOvertimes(req, res) {
+  try {
+    const [overtimes] = await db.execute(`
+      SELECT 
+        o.id, o.user_id, o.work_date, o.hours, o.description, 
+        o.status, o.created_at,
+        e.name AS employee_name, e.email AS employee_email
+      FROM overtimes o
+      JOIN employees e ON o.user_id = e.id
+      ORDER BY o.created_at DESC
+    `);
+    res.json({ overtimes });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch overtimes' });
+  }
+}
+
+export async function approveOvertime(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute(
+      'UPDATE overtimes SET status = ? WHERE id = ?',
+      ['approved', id]
+    );
+
+    // Get overtime details for notification
+    const [overtime] = await db.execute(
+      'SELECT user_id, hours, work_date FROM overtimes WHERE id = ?',
+      [id]
+    );
+
+    if (overtime.length > 0) {
+      await createNotification(
+        overtime[0].user_id,
+        `Your overtime request for ${overtime[0].work_date} (${overtime[0].hours} hours) has been approved`
+      );
+    }
+
+    await logAudit(req.user.id, 'overtime_approved', { overtime_id: id });
+    res.json({ message: 'Overtime approved' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve overtime' });
+  }
+}
+
+export async function rejectOvertime(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute(
+      'UPDATE overtimes SET status = ? WHERE id = ?',
+      ['rejected', id]
+    );
+
+    await logAudit(req.user.id, 'overtime_rejected', { overtime_id: id });
+    res.json({ message: 'Overtime rejected' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject overtime' });
+  }
+}
+
+/* ======================
+     AUDIT LOGS
+====================== */
+export async function getAuditLogs(req, res) {
+  try {
+    // Get from query string, if present
+    const rawLimit = parseInt(req.query.limit, 10);
+    const rawOffset = parseInt(req.query.offset, 10);
+
+    // Sanitize values
+    let limitNum = Number.isNaN(rawLimit) ? 100 : rawLimit;
+    let offsetNum = Number.isNaN(rawOffset) ? 0 : rawOffset;
+
+    // Hard safety limits
+    if (limitNum <= 0) limitNum = 100;
+    if (limitNum > 500) limitNum = 500;
+    if (offsetNum < 0) offsetNum = 0;
+
+    // Build SQL with numbers directly (no ? in LIMIT/OFFSET)
+    const [logs] = await db.execute(`
+      SELECT 
+        al.id,
+        al.user_id,
+        al.action,
+        al.metadata,
+        al.created_at,
+        e.name  AS user_name,
+        e.email AS user_email
+      FROM audit_logs al
+      LEFT JOIN employees e ON al.user_id = e.id
+      ORDER BY al.created_at DESC
+      LIMIT ${limitNum} OFFSET ${offsetNum}
+    `);
+
+    const [[count]] = await db.execute(
+      'SELECT COUNT(*) AS total FROM audit_logs'
+    );
+
+    res.json({
+      logs,
+      total: count.total,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 }

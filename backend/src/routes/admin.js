@@ -11,23 +11,85 @@ import {
     getLeaveRequests,
     approveLeaveRequest,
     rejectLeaveRequest,
-    getHrAnalytics,      // if you have this
-    updateAdminProfile,  // 👈 add this
-    changeAdminPassword, // 👈 and this
+    getHrAnalytics,
+    updateAdminProfile,
+    changeAdminPassword,
+    // Departments
+    getDepartments,
+    createDepartment,
+    updateDepartment,
+    deleteDepartment,
+    // Holidays
+    getHolidays,
+    createHoliday,
+    updateHoliday,
+    deleteHoliday,
+    // Leave Policies
+    getLeavePolicies,
+    createLeavePolicy,
+    updateLeavePolicy,
+    deleteLeavePolicy,
+    // Attendance Corrections
+    getAttendanceCorrections,
+    approveAttendanceCorrection,
+    rejectAttendanceCorrection,
+    // Overtimes
+    getOvertimes,
+    approveOvertime,
+    rejectOvertime,
+    // Audit Logs
+    getAuditLogs,
   } from '../controllers/adminController.js';
-  
-
 
 const router = express.Router();
 
+// Auth
 router.post('/login', loginRateLimiter, adminLogin);
+
+// Employee Management
 router.post('/employees', authToken, requireRole('admin'), addEmployee);
 router.put('/employees/:id', authToken, requireRole('admin'), updateEmployee);
 router.get('/users', authToken, requireRole('admin'), getUsers);
 router.delete('/users/:id', authToken, requireRole('admin'), deleteUser);
+
+// Leave Management
 router.get('/leave-requests', authToken, requireRole('admin'), getLeaveRequests);
 router.put('/leave-requests/:id/approve', authToken, requireRole('admin'), approveLeaveRequest);
 router.put('/leave-requests/:id/reject', authToken, requireRole('admin'), rejectLeaveRequest);
+
+// Departments
+router.get('/departments', authToken, requireRole('admin'), getDepartments);
+router.post('/departments', authToken, requireRole('admin'), createDepartment);
+router.put('/departments/:id', authToken, requireRole('admin'), updateDepartment);
+router.delete('/departments/:id', authToken, requireRole('admin'), deleteDepartment);
+
+// Holidays
+router.get('/holidays', authToken, requireRole('admin'), getHolidays);
+router.post('/holidays', authToken, requireRole('admin'), createHoliday);
+router.put('/holidays/:id', authToken, requireRole('admin'), updateHoliday);
+router.delete('/holidays/:id', authToken, requireRole('admin'), deleteHoliday);
+
+// Leave Policies
+router.get('/leave-policies', authToken, requireRole('admin'), getLeavePolicies);
+router.post('/leave-policies', authToken, requireRole('admin'), createLeavePolicy);
+router.put('/leave-policies/:id', authToken, requireRole('admin'), updateLeavePolicy);
+router.delete('/leave-policies/:id', authToken, requireRole('admin'), deleteLeavePolicy);
+
+// Attendance Corrections
+router.get('/attendance-corrections', authToken, requireRole('admin'), getAttendanceCorrections);
+router.put('/attendance-corrections/:id/approve', authToken, requireRole('admin'), approveAttendanceCorrection);
+router.put('/attendance-corrections/:id/reject', authToken, requireRole('admin'), rejectAttendanceCorrection);
+
+// Overtimes
+router.get('/overtimes', authToken, requireRole('admin'), getOvertimes);
+router.put('/overtimes/:id/approve', authToken, requireRole('admin'), approveOvertime);
+router.put('/overtimes/:id/reject', authToken, requireRole('admin'), rejectOvertime);
+
+// Analytics & Audit
+router.get('/analytics', authToken, requireRole('admin'), getHrAnalytics);
+router.get('/audit-logs', authToken, requireRole('admin'), getAuditLogs);
+
+// Profile
 router.put('/profile/update', authToken, updateAdminProfile);
 router.put('/profile/change-password', authToken, changeAdminPassword);
 

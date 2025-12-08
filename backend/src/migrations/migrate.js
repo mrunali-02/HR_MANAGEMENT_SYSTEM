@@ -6,29 +6,33 @@ dotenv.config();
 
 async function migrate() {
   let connection;
-  
+
   try {
     connection = await db.getConnection();
-    
+
     console.log('Starting database migration...');
 
     // Create employees table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS employees (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id INT PRIMARY KEY,
         employee_id VARCHAR(50) UNIQUE,
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         name VARCHAR(255),
         role ENUM('admin', 'employee', 'manager', 'hr') NOT NULL DEFAULT 'employee',
+        manager_id INT,
         department VARCHAR(255),
         phone VARCHAR(50),
         joined_on DATE,
+        photo_url VARCHAR(500),
         address TEXT,
         contact_number VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_email (email),
-        INDEX idx_role (role)
+        INDEX idx_role (role),
+        INDEX idx_manager_id (manager_id),
+        FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created employees table');
@@ -36,7 +40,7 @@ async function migrate() {
     // Create profiles table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS profiles (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id INT PRIMARY KEY,
         user_id INT NOT NULL,
         display_name VARCHAR(255),
         bio TEXT,
@@ -104,12 +108,31 @@ async function migrate() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         type ENUM('sick', 'casual', 'paid', 'emergency') NOT NULL,
-        total_days INT NOT NULL DEFAULT 0,
+        total_days INT NOT NULL DEFAULT 05,
         carry_forward TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created leave_policies table');
+    // Seed default leave policies if empty
+    const [lpCountRows] = await connection.execute(
+      'SELECT COUNT(*) AS cnt FROM leave_policies'
+    );
+
+    if (lpCountRows[0].cnt === 0) {
+      await connection.execute(`
+    INSERT INTO leave_policies (name, type, total_days, carry_forward)
+    VALUES
+      ('Sick Leave',     'sick',     5, 0),
+      ('Casual Leave',   'casual',   3, 0),
+      ('Paid Leave',     'paid',    2, 0),
+      ('Emergency Leave','emergency',3, 0)
+  `);
+      console.log('✓ Seeded default leave policies');
+    } else {
+      console.log('⚠ leave_policies already has data, skipping seed');
+    }
+
 
     // Create attendance table
     await connection.execute(`
@@ -163,6 +186,47 @@ async function migrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created leave_requests table');
+
+    // Create leave balances table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS leave_balances (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        leave_type ENUM('sick', 'casual', 'paid', 'emergency') NOT NULL,
+        total_days INT NOT NULL DEFAULT 05,
+        used_days INT NOT NULL DEFAULT 0,
+        remaining_days INT NOT NULL DEFAULT 0,
+        year INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_leave_year (user_id, leave_type, year),
+        INDEX idx_user_year (user_id, year)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Created leave_balances table');
+
+    // Create work_hours table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS work_hours (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        attendance_id INT NOT NULL,
+        work_date DATE NOT NULL,
+        check_in_time TIME NOT NULL,
+        check_out_time TIME NOT NULL,
+        total_hours DECIMAL(5,2) NOT NULL DEFAULT 0,
+        overtime_hours DECIMAL(5,2) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
+        FOREIGN KEY (attendance_id) REFERENCES attendance(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_attendance_work_hours (attendance_id),
+        INDEX idx_user_date (user_id, work_date),
+        INDEX idx_work_date (work_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Created work_hours table');
 
     // Create overtime table
     await connection.execute(`

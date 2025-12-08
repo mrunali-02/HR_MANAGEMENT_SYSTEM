@@ -24,6 +24,7 @@ const TABS = {
   EMPLOYEES: 'employees',
   LEAVE_APPLICATIONS: 'leaveApplications',
   REPORTS: 'reports',
+  AUDIT_LOGS: 'auditLogs',
   SETTINGS: 'settings',
 };
 
@@ -37,6 +38,13 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+
+  // Tab-specific error and success messages
+  const [tabErrors, setTabErrors] = useState({});
+  const [tabSuccess, setTabSuccess] = useState({});
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -74,6 +82,29 @@ function AdminDashboard() {
     });
   }, [user, navigate]);
 
+  useEffect(() => {
+    if (activeTab === TABS.AUDIT_LOGS) {
+      fetchAuditLogs();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!showAddForm || selectedEmployee) return;
+    setFormData((prev) => {
+      const generated = generateEmployeeId(prev.role);
+      if (prev.employee_id === generated) return prev;
+      return { ...prev, employee_id: generated };
+    });
+  }, [showAddForm, selectedEmployee, users]);
+
+  // Clear messages when switching tabs
+  useEffect(() => {
+    setError('');
+    setSuccess('');
+    setTabErrors({});
+    setTabSuccess({});
+  }, [activeTab]);
+
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -107,6 +138,24 @@ function AdminDashboard() {
     }
   };
 
+  const fetchAuditLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/admin/audit-logs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setAuditLogs(response.data.logs || []);
+      setAuditTotal(response.data.total || 0);
+    } catch (err) {
+      console.error('Error fetching audit logs:', err);
+      setAuditLogs([]);
+      setAuditTotal(0);
+      setTabErrors((prev) => ({ ...prev, [TABS.AUDIT_LOGS]: err.response?.data?.error || 'Failed to fetch audit logs' }));
+    }
+  };
+
   const handleApproveLeave = async (leaveId) => {
     try {
       const token = localStorage.getItem('token');
@@ -119,12 +168,20 @@ function AdminDashboard() {
           },
         }
       );
-      setSuccess('Leave request approved successfully!');
-      setError('');
+      setTabSuccess({ [TABS.LEAVE_APPLICATIONS]: 'Leave request approved successfully!' });
+      setTimeout(() => setTabSuccess(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.LEAVE_APPLICATIONS];
+        return newState;
+      }), 3000);
       fetchLeaveApplications();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to approve leave request');
-      setSuccess('');
+      setTabErrors({ [TABS.LEAVE_APPLICATIONS]: err.response?.data?.error || 'Failed to approve leave request' });
+      setTimeout(() => setTabErrors(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.LEAVE_APPLICATIONS];
+        return newState;
+      }), 5000);
     }
   };
 
@@ -144,12 +201,20 @@ function AdminDashboard() {
           },
         }
       );
-      setSuccess('Leave request rejected successfully!');
-      setError('');
+      setTabSuccess({ [TABS.LEAVE_APPLICATIONS]: 'Leave request rejected successfully!' });
+      setTimeout(() => setTabSuccess(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.LEAVE_APPLICATIONS];
+        return newState;
+      }), 3000);
       fetchLeaveApplications();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to reject leave request');
-      setSuccess('');
+      setTabErrors({ [TABS.LEAVE_APPLICATIONS]: err.response?.data?.error || 'Failed to reject leave request' });
+      setTimeout(() => setTabErrors(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.LEAVE_APPLICATIONS];
+        return newState;
+      }), 5000);
     }
   };
 
@@ -196,7 +261,12 @@ function AdminDashboard() {
             },
           }
         );
-        setSuccess('Employee updated successfully!');
+        setTabSuccess({ [TABS.EMPLOYEES]: 'Employee updated successfully!' });
+        setTimeout(() => setTabSuccess(prev => {
+          const newState = { ...prev };
+          delete newState[TABS.EMPLOYEES];
+          return newState;
+        }), 3000);
       } else {
         // Create new employee
         await axios.post(`${API_BASE_URL}/admin/employees`, formData, {
@@ -204,14 +274,24 @@ function AdminDashboard() {
             Authorization: `Bearer ${token}`,
           },
         });
-        setSuccess('Employee added successfully!');
+        setTabSuccess({ [TABS.EMPLOYEES]: 'Employee added successfully!' });
+        setTimeout(() => setTabSuccess(prev => {
+          const newState = { ...prev };
+          delete newState[TABS.EMPLOYEES];
+          return newState;
+        }), 3000);
       }
 
       resetForm();
       setShowAddForm(false);
       fetchUsers();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to add employee');
+      setTabErrors({ [TABS.EMPLOYEES]: err.response?.data?.error || 'Failed to add employee' });
+      setTimeout(() => setTabErrors(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.EMPLOYEES];
+        return newState;
+      }), 5000);
     }
   };
 
@@ -227,12 +307,20 @@ function AdminDashboard() {
           Authorization: `Bearer ${token}`,
         },
       });
-      setSuccess('User deleted successfully!');
-      setError('');
+      setTabSuccess({ [TABS.EMPLOYEES]: 'User deleted successfully!' });
+      setTimeout(() => setTabSuccess(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.EMPLOYEES];
+        return newState;
+      }), 3000);
       fetchUsers();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete user');
-      setSuccess('');
+      setTabErrors({ [TABS.EMPLOYEES]: err.response?.data?.error || 'Failed to delete user' });
+      setTimeout(() => setTabErrors(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.EMPLOYEES];
+        return newState;
+      }), 5000);
     }
   };
 
@@ -245,6 +333,24 @@ function AdminDashboard() {
   const totalManagers = users.filter((u) => u.role === 'manager').length;
   const totalHr = users.filter((u) => u.role === 'hr').length;
   const totalAdmins = users.filter((u) => u.role === 'admin').length;
+
+  const generateEmployeeId = (role) => {
+    const prefixMap = { employee: 'emp', manager: 'man', hr: 'hr' };
+    const prefix = prefixMap[role] || 'emp';
+    const regex = new RegExp(`^${prefix}(\\d+)$`, 'i');
+
+    const maxNumber = users.reduce((max, u) => {
+      if (!u.employee_id) return max;
+      const match = u.employee_id.match(regex);
+      if (!match) return max;
+      const parsed = parseInt(match[1], 10);
+      if (Number.isNaN(parsed)) return max;
+      return Math.max(max, parsed);
+    }, 0);
+
+    const nextNumber = maxNumber + 1;
+    return `${prefix}${String(nextNumber).padStart(3, '0')}`;
+  };
 
   const renderDashboard = () => (
     <div className="space-y-6">
@@ -323,8 +429,16 @@ function AdminDashboard() {
   const handleEditClick = (employee) => {
     setSelectedEmployee(employee);
     setShowAddForm(true);
-    setError('');
-    setSuccess('');
+    setTabErrors(prev => {
+      const newState = { ...prev };
+      delete newState[TABS.EMPLOYEES];
+      return newState;
+    });
+    setTabSuccess(prev => {
+      const newState = { ...prev };
+      delete newState[TABS.EMPLOYEES];
+      return newState;
+    });
     setFormData({
       employee_id: employee.employee_id || '',
       name: employee.name || '',
@@ -360,15 +474,15 @@ function AdminDashboard() {
         </button>
       </div>
 
-      {error && (
+      {tabErrors[TABS.EMPLOYEES] && (
         <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
-          {error}
+          {tabErrors[TABS.EMPLOYEES]}
         </div>
       )}
 
-      {success && (
+      {tabSuccess[TABS.EMPLOYEES] && (
         <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-2">
-          {success}
+          {tabSuccess[TABS.EMPLOYEES]}
         </div>
       )}
 
@@ -426,7 +540,13 @@ function AdminDashboard() {
                 <select
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                      employee_id: selectedEmployee ? prev.employee_id : generateEmployeeId(e.target.value),
+                    }))
+                  }
                 >
                   <option value="employee">Employee</option>
                   <option value="manager">Manager</option>
@@ -590,15 +710,15 @@ function AdminDashboard() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Leave Applications</h2>
 
-      {error && (
+      {tabErrors[TABS.LEAVE_APPLICATIONS] && (
         <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
-          {error}
+          {tabErrors[TABS.LEAVE_APPLICATIONS]}
         </div>
       )}
 
-      {success && (
+      {tabSuccess[TABS.LEAVE_APPLICATIONS] && (
         <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-2">
-          {success}
+          {tabSuccess[TABS.LEAVE_APPLICATIONS]}
         </div>
       )}
 
@@ -644,13 +764,12 @@ function AdminDashboard() {
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        la.status === 'approved'
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${la.status === 'approved'
                           ? 'bg-green-100 text-green-800'
                           : la.status === 'rejected'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}
                     >
                       {la.status}
                     </span>
@@ -688,6 +807,78 @@ function AdminDashboard() {
                   </td>
                 </tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAuditLogs = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Audit Logs</h2>
+          <p className="text-sm text-gray-500">System activities and actions</p>
+        </div>
+        <div className="text-sm text-gray-500">Total: {auditTotal}</div>
+      </div>
+
+      {tabErrors[TABS.AUDIT_LOGS] && (
+        <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
+          {tabErrors[TABS.AUDIT_LOGS]}
+        </div>
+      )}
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metadata</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {auditLogs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-4 text-center text-sm text-gray-500">
+                    No audit logs found.
+                  </td>
+                </tr>
+              )}
+              {auditLogs.map((log) => {
+                let meta = null;
+                try {
+                  meta = log.metadata ? JSON.parse(log.metadata) : null;
+                } catch (e) {
+                  meta = log.metadata;
+                }
+                return (
+                  <tr key={log.id}>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                      {log.created_at ? new Date(log.created_at).toLocaleString() : '--'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                      {log.user_name || log.user_email || 'System'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                      {log.action}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {meta
+                        ? typeof meta === 'string'
+                          ? meta
+                          : Object.entries(meta)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(', ')
+                        : '--'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -922,51 +1113,55 @@ function AdminDashboard() {
         <nav className="flex-1 py-4 space-y-1">
           <button
             onClick={() => setActiveTab(TABS.DASHBOARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.DASHBOARD
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+              }`}
           >
             Dashboard
           </button>
           <button
             onClick={() => setActiveTab(TABS.EMPLOYEES)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.EMPLOYEES
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.EMPLOYEES
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+              }`}
           >
             Employee List
           </button>
           <button
             onClick={() => setActiveTab(TABS.LEAVE_APPLICATIONS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.LEAVE_APPLICATIONS
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVE_APPLICATIONS
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+              }`}
           >
             Leave Applications
           </button>
           <button
-            onClick={() => setActiveTab(TABS.REPORTS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.REPORTS
+            onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.AUDIT_LOGS
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+              }`}
+          >
+            Audit Logs
+          </button>
+          <button
+            onClick={() => setActiveTab(TABS.REPORTS)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
+                ? 'bg-slate-800 text-white'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Reports
           </button>
           <button
             onClick={() => setActiveTab(TABS.SETTINGS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.SETTINGS
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.SETTINGS
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+              }`}
           >
             Settings
           </button>
@@ -990,6 +1185,7 @@ function AdminDashboard() {
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
+              {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
               {activeTab === TABS.REPORTS && 'Reports'}
               {activeTab === TABS.SETTINGS && 'Settings'}
             </h1>
@@ -1004,6 +1200,7 @@ function AdminDashboard() {
           {activeTab === TABS.DASHBOARD && renderDashboard()}
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+          {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.SETTINGS && renderSettings()}
         </main>

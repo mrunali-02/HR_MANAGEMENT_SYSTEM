@@ -16,6 +16,8 @@ function EmployeeDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | attendance | leaves | settings
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   // Attendance state
   const [todayAttendance, setTodayAttendance] = useState(null); 
@@ -63,6 +65,12 @@ function EmployeeDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user, navigate]);
 
+  // Clear messages when switching tabs
+  useEffect(() => {
+    setError('');
+    setSuccess('');
+  }, [activeTab]);
+
   const loadAllData = async () => {
     setLoading(true);
     setError('');
@@ -91,6 +99,10 @@ function EmployeeDashboard() {
         const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
         setAttendanceRecords(attRes.data.records || []);
         setTodayAttendance(attRes.data.today || null);
+        // Set attendance marked state if today's attendance exists
+        setAttendanceMarked(attRes.data.today?.status === 'present');
+        // Set checkout marked state if checkout time exists
+        setCheckoutMarked(!!attRes.data.today?.check_out);
       } catch (err) {
         console.error('Error fetching attendance:', err);
       }
@@ -151,6 +163,11 @@ function EmployeeDashboard() {
   };
 
   const handleMarkAttendance = async () => {
+    // Only allow if not already marked
+    if (attendanceMarked || todayAttendance?.status === 'present') {
+      return;
+    }
+
     setError('');
     setSuccess('');
     try {
@@ -160,16 +177,68 @@ function EmployeeDashboard() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
+      // Only set success if we're on the attendance tab
+      if (activeTab === 'attendance') {
       setSuccess('Attendance marked successfully!');
-      // refresh attendance
+        // Clear after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
+      }
+      
+      // Mark as attended and refresh attendance
+      setAttendanceMarked(true);
+      const token2 = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token2}` };
+      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+      setAttendanceRecords(attRes.data.records || []);
+      setTodayAttendance(attRes.data.today || null);
+      setCheckoutMarked(!!attRes.data.today?.check_out);
+    } catch (err) {
+      console.error('Error marking attendance:', err);
+      if (activeTab === 'attendance') {
+        setError(err.response?.data?.error || 'Failed to mark attendance');
+        setTimeout(() => setError(''), 5000);
+      }
+    }
+  };
+
+  const handleCheckout = async () => {
+    // Only allow if checked in but not checked out
+    if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_BASE_URL}/employee/${id}/attendance/checkout`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Only set success if we're on the attendance tab
+      if (activeTab === 'attendance') {
+        const hours = response.data.total_hours || '0';
+        const overtime = response.data.overtime_hours || '0';
+        setSuccess(`Checkout marked successfully! Worked ${hours} hours${parseFloat(overtime) > 0 ? ` (${overtime} hrs overtime)` : ''}`);
+        setTimeout(() => setSuccess(''), 5000);
+      }
+      
+      // Mark as checked out and refresh attendance
+      setCheckoutMarked(true);
       const token2 = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token2}` };
       const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
       setAttendanceRecords(attRes.data.records || []);
       setTodayAttendance(attRes.data.today || null);
     } catch (err) {
-      console.error('Error marking attendance:', err);
-      setError(err.response?.data?.error || 'Failed to mark attendance');
+      console.error('Error marking checkout:', err);
+      if (activeTab === 'attendance') {
+        setError(err.response?.data?.error || 'Failed to mark checkout');
+        setTimeout(() => setError(''), 5000);
+      }
     }
   };
 
@@ -207,7 +276,11 @@ function EmployeeDashboard() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // Only set success if we're on the leaves tab
+      if (activeTab === 'leaves') {
       setSuccess('Leave applied successfully!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
       setLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '' });
 
       // refresh leave history + balance
@@ -226,7 +299,10 @@ function EmployeeDashboard() {
       }
     } catch (err) {
       console.error('Error applying leave:', err);
+      if (activeTab === 'leaves') {
       setError(err.response?.data?.error || 'Failed to apply leave');
+        setTimeout(() => setError(''), 5000);
+      }
     } finally {
       setLeaveSubmitting(false);
     }
@@ -372,12 +448,23 @@ function EmployeeDashboard() {
 
         {/* Scrollable Content */}
         <main className="flex-1 p-6 overflow-y-auto">
-          {error && (
+          {/* Show error/success only on relevant tabs */}
+          {activeTab === 'attendance' && error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">
               {error}
             </div>
           )}
-          {success && (
+          {activeTab === 'attendance' && success && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 text-sm">
+              {success}
+            </div>
+          )}
+          {activeTab === 'leaves' && error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">
+              {error}
+            </div>
+          )}
+          {activeTab === 'leaves' && success && (
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 text-sm">
               {success}
             </div>
@@ -406,18 +493,49 @@ function EmployeeDashboard() {
                          In: {todayAttendance.check_in}
                        </div>
                     )}
+                    {todayAttendance?.check_out && (
+                       <div className="mt-1 text-xs opacity-75">
+                         Out: {todayAttendance.check_out}
+                       </div>
+                    )}
+                    {todayAttendance?.total_hours && (
+                       <div className="mt-1 text-xs opacity-75 font-semibold">
+                         Hours: {todayAttendance.total_hours}
+                         {todayAttendance.overtime_hours && parseFloat(todayAttendance.overtime_hours) > 0 && (
+                           <span className="ml-1">(+{todayAttendance.overtime_hours} OT)</span>
+                         )}
+                       </div>
+                    )}
                   </div>
+                  <div className="mt-4 space-y-2">
                   <button
                     onClick={handleMarkAttendance}
-                    disabled={todayAttendance?.status === 'present'}
-                    className={`mt-4 w-full text-xs font-bold px-3 py-2 rounded-lg transition ${
-                      todayAttendance?.status === 'present'
-                        ? 'bg-white/20 text-white cursor-not-allowed'
+                      disabled={attendanceMarked || todayAttendance?.status === 'present'}
+                      className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${
+                        attendanceMarked || todayAttendance?.status === 'present'
+                          ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
                         : 'bg-white text-indigo-600 hover:bg-indigo-50 shadow-md'
                     }`}
                   >
-                    {todayAttendance?.status === 'present' ? 'Marked' : 'Check In Now'}
+                      {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
+                    </button>
+                    {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
+                      <button
+                        onClick={handleCheckout}
+                        className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition"
+                      >
+                        Check Out
+                      </button>
+                    )}
+                    {checkoutMarked && todayAttendance?.check_out && (
+                      <button
+                        disabled
+                        className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
+                      >
+                        ✓ Checked Out
                   </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* 2. Leave Balance (Green Gradient) */}
@@ -492,7 +610,42 @@ function EmployeeDashboard() {
           {/* ATTENDANCE TAB */}
           {activeTab === 'attendance' && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Attendance Records</h2>
+                <div className="flex gap-2">
+                  {!(attendanceMarked || todayAttendance?.status === 'present') ? (
+                    <button
+                      onClick={handleMarkAttendance}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold transition"
+                    >
+                      Check In Now
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
+                    >
+                      ✓ Checked In
+                    </button>
+                  )}
+                  {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
+                    <button
+                      onClick={handleCheckout}
+                      className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-emerald-600 text-sm font-bold transition"
+                    >
+                      Check Out
+                    </button>
+                  )}
+                  {checkoutMarked && todayAttendance?.check_out && (
+                    <button
+                      disabled
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
+                    >
+                      ✓ Checked Out
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -502,12 +655,13 @@ function EmployeeDashboard() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Hours</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {attendanceRecords.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="px-4 py-4 text-center text-sm text-gray-500">
+                          <td colSpan={5} className="px-4 py-4 text-center text-sm text-gray-500">
                             No records found for this month.
                           </td>
                         </tr>
@@ -533,6 +687,20 @@ function EmployeeDashboard() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                             {rec.check_out || '--'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {rec.total_hours ? (
+                              <span>
+                                {rec.total_hours} hrs
+                                {rec.overtime_hours && parseFloat(rec.overtime_hours) > 0 && (
+                                  <span className="text-emerald-600 ml-1">
+                                    (+{rec.overtime_hours} OT)
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              '--'
+                            )}
                           </td>
                         </tr>
                       ))}

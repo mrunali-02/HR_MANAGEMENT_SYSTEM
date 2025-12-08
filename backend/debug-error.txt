@@ -1,0 +1,56 @@
+Testing connection...
+Connection success.
+Describing audit_logs...
+Schema: [
+  {
+    "Field": "id",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": "auto_increment"
+  },
+  {
+    "Field": "user_id",
+    "Type": "int",
+    "Null": "YES",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "action",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "metadata",
+    "Type": "text",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "created_at",
+    "Type": "timestamp",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  }
+]
+Testing audit_logs fetch mock...
+Fetch failed: Incorrect arguments to mysqld_stmt_execute
+SQL: 
+        SELECT 
+          al.id, al.user_id, al.action, al.metadata, al.created_at,
+          e.name AS user_name, e.email AS user_email
+        FROM audit_logs al
+        LEFT JOIN employees e ON al.user_id = e.id
+        ORDER BY al.created_at DESC
+        LIMIT ? OFFSET ?
+      

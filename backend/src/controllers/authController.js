@@ -30,6 +30,11 @@ export async function login(req, res) {
 
     if (rows.length === 0) {
       console.log(`User not found: ${email}`);
+      // Log failed login attempt
+      await db.execute(
+        'INSERT INTO failed_logins (email, ip_address, user_agent) VALUES (?, ?, ?)',
+        [email, req.ip || req.connection.remoteAddress, req.get('user-agent') || null]
+      ).catch(err => console.error('Failed to log failed login:', err));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -39,6 +44,11 @@ export async function login(req, res) {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       console.log(`Password mismatch for user: ${email}`);
+      // Log failed login attempt
+      await db.execute(
+        'INSERT INTO failed_logins (email, ip_address, user_agent) VALUES (?, ?, ?)',
+        [email, req.ip || req.connection.remoteAddress, req.get('user-agent') || null]
+      ).catch(err => console.error('Failed to log failed login:', err));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
@@ -52,6 +62,10 @@ export async function login(req, res) {
        VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR))`,
       [user.id, token, TOKEN_EXPIRY_HOURS]
     );
+
+    // Log successful login
+    const { logAudit } = await import('../utils/audit.js');
+    await logAudit(user.id, 'login_successful', { email: user.email }).catch(() => {});
 
     return res.json({
       token,

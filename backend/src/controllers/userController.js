@@ -1,4 +1,5 @@
 import db from '../db/db.js';
+import { logAudit, createNotification } from '../utils/audit.js';
 
 const isSelfOrAdmin = (reqUser, targetUserId) =>
   reqUser.role === 'admin' || reqUser.id === targetUserId;
@@ -101,18 +102,73 @@ export async function getAttendance(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    const hoursSelect = `
+  COALESCE(
+    CASE 
+      WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NOT NULL THEN
+        TIME_FORMAT(
+          SEC_TO_TIME(
+            TIMESTAMPDIFF(
+              SECOND,
+              CONCAT(a.attendance_date, ' ', a.check_in_time),
+              CONCAT(a.attendance_date, ' ', a.check_out_time)
+            )
+          ),
+          '%H:%i'
+        )
+      ELSE TIME_FORMAT(SEC_TO_TIME(wh.total_hours * 3600), '%H:%i')
+    END,
+    '00:00'
+  ) AS total_hours_calc,
+
+  COALESCE(
+    CASE 
+      WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NOT NULL THEN
+        TIME_FORMAT(
+          SEC_TO_TIME(
+            GREATEST(
+              TIMESTAMPDIFF(
+                SECOND,
+                CONCAT(a.attendance_date, ' ', a.check_in_time),
+                CONCAT(a.attendance_date, ' ', a.check_out_time)
+              ) - (8 * 3600),
+              0
+            )
+          ),
+          '%H:%i'
+        )
+      ELSE TIME_FORMAT(SEC_TO_TIME(wh.overtime_hours * 3600), '%H:%i')
+    END,
+    '00:00'
+  ) AS overtime_hours_calc
+`;
+
+
+
     const [records] = await db.execute(
-      `SELECT attendance_date, status, check_in_time, check_out_time
-       FROM attendance
-       WHERE user_id = ? AND attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-       ORDER BY attendance_date DESC`,
+      `SELECT 
+        a.attendance_date, 
+        a.status, 
+        a.check_in_time, 
+        a.check_out_time,
+        ${hoursSelect}
+       FROM attendance a
+       LEFT JOIN work_hours wh ON a.id = wh.attendance_id
+       WHERE a.user_id = ? AND a.attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+       ORDER BY a.attendance_date DESC`,
       [userId]
     );
 
     const [todayRows] = await db.execute(
-      `SELECT attendance_date, status, check_in_time, check_out_time
-       FROM attendance
-       WHERE user_id = ? AND attendance_date = CURDATE()
+      `SELECT 
+        a.attendance_date, 
+        a.status, 
+        a.check_in_time, 
+        a.check_out_time,
+        ${hoursSelect}
+       FROM attendance a
+       LEFT JOIN work_hours wh ON a.id = wh.attendance_id
+       WHERE a.user_id = ? AND a.attendance_date = CURDATE()
        LIMIT 1`,
       [userId]
     );
@@ -121,8 +177,12 @@ export async function getAttendance(req, res) {
       date: formatDate(row.attendance_date),
       status: row.status,
       check_in: formatTime(row.check_in_time),
-      check_out: formatTime(row.check_out_time)
+      check_out: formatTime(row.check_out_time),
+      // just use the string, DO NOT parseFloat
+      total_hours: row.total_hours_calc,
+      overtime_hours: row.overtime_hours_calc
     });
+    
 
     res.json({
       today: todayRows.length ? mapRow(todayRows[0]) : null,
@@ -158,6 +218,8 @@ export async function markAttendance(req, res) {
        VALUES (?, CURDATE(), 'present', ?)`,
       [userId, nowTime]
     );
+
+    await logAudit(userId, 'attendance_marked', { attendance_date: new Date().toISOString().split('T')[0], check_in: nowTime });
 
     res.json({ message: 'Attendance marked successfully' });
   } catch (error) {
@@ -322,5 +384,219 @@ export async function updateEmployeeProfile(req, res) {
   } catch (error) {
     console.error('Update employee profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+}
+
+/* ======================
+     OVERTIME MANAGEMENT
+====================== */
+export async function getOvertimes(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const [overtimes] = await db.execute(
+      `SELECT id, work_date, hours, description, status, created_at
+       FROM overtimes
+       WHERE user_id = ?
+       ORDER BY work_date DESC`,
+      [userId]
+    );
+
+    res.json({ overtimes });
+  } catch (error) {
+    console.error('Get overtimes error:', error);
+    res.status(500).json({ error: 'Failed to fetch overtimes' });
+  }
+}
+
+export async function createOvertime(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { work_date, hours, description } = req.body;
+    if (!work_date || !hours) {
+      return res.status(400).json({ error: 'Work date and hours are required' });
+    }
+
+    await db.execute(
+      `INSERT INTO overtimes (user_id, work_date, hours, description, status)
+       VALUES (?, ?, ?, ?, 'pending')`,
+      [userId, work_date, hours, description || null]
+    );
+
+    await logAudit(userId, 'overtime_requested', { work_date, hours });
+    await createNotification(userId, `Overtime request submitted for ${work_date}`);
+    res.status(201).json({ message: 'Overtime request submitted' });
+  } catch (error) {
+    console.error('Create overtime error:', error);
+    res.status(500).json({ error: 'Failed to create overtime request' });
+  }
+}
+
+/* ======================
+     ATTENDANCE CORRECTIONS
+====================== */
+export async function getAttendanceCorrections(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const [corrections] = await db.execute(`
+      SELECT 
+        ac.id, ac.attendance_id, ac.correction_type, ac.reason, 
+        ac.status, ac.reviewed_by, ac.created_at,
+        a.attendance_date, a.status AS original_status
+      FROM attendance_corrections ac
+      JOIN attendance a ON ac.attendance_id = a.id
+      WHERE ac.user_id = ?
+      ORDER BY ac.created_at DESC
+    `, [userId]);
+
+    res.json({ corrections });
+  } catch (error) {
+    console.error('Get attendance corrections error:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance corrections' });
+  }
+}
+
+export async function createAttendanceCorrection(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { attendance_id, correction_type, reason } = req.body;
+    if (!attendance_id || !correction_type || !reason) {
+      return res.status(400).json({ error: 'Attendance ID, correction type, and reason are required' });
+    }
+
+    // Verify attendance belongs to user
+    const [attendance] = await db.execute(
+      'SELECT id FROM attendance WHERE id = ? AND user_id = ?',
+      [attendance_id, userId]
+    );
+
+    if (attendance.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    await db.execute(
+      `INSERT INTO attendance_corrections (attendance_id, user_id, correction_type, reason, status)
+       VALUES (?, ?, ?, ?, 'pending')`,
+      [attendance_id, userId, correction_type, reason]
+    );
+
+    await logAudit(userId, 'attendance_correction_requested', { attendance_id, correction_type });
+    await createNotification(userId, 'Attendance correction request submitted');
+    res.status(201).json({ message: 'Attendance correction request submitted' });
+  } catch (error) {
+    console.error('Create attendance correction error:', error);
+    res.status(500).json({ error: 'Failed to create attendance correction' });
+  }
+}
+
+/* ======================
+     MARK CHECKOUT
+====================== */
+export async function markCheckout(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Find today's attendance with check-in time
+    const [attendance] = await db.execute(
+      `SELECT id, attendance_date, check_in_time, check_out_time 
+       FROM attendance 
+       WHERE user_id = ? AND attendance_date = CURDATE()`,
+      [userId]
+    );
+
+    if (attendance.length === 0) {
+      return res.status(400).json({ error: 'No attendance marked for today. Please mark attendance first.' });
+    }
+
+    const att = attendance[0];
+
+    // Check if already checked out
+    if (att.check_out_time) {
+      return res.status(400).json({ error: 'Checkout already marked for today.' });
+    }
+
+    if (!att.check_in_time) {
+      return res.status(400).json({ error: 'Check-in time not found. Please mark attendance first.' });
+    }
+
+    const now = new Date();
+    const nowTime = now.toTimeString().substring(0, 8);
+
+    // Update attendance with checkout time
+    await db.execute(
+      'UPDATE attendance SET check_out_time = ? WHERE id = ?',
+      [nowTime, att.id]
+    );
+
+    // Calculate work hours
+    const [workHoursResult] = await db.execute(
+      `SELECT 
+        TIMESTAMPDIFF(MINUTE, 
+          CONCAT(?, ' ', ?), 
+          CONCAT(?, ' ', ?)
+        ) AS minutes
+      `,
+      [att.attendance_date, att.check_in_time, att.attendance_date, nowTime]
+    );
+
+    const totalMinutes = workHoursResult[0]?.minutes || 0;
+    const totalHoursDecimal = totalMinutes / 60;
+    const totalHours = parseFloat(totalHoursDecimal.toFixed(2));
+    const overtimeHoursDecimal = Math.max(0, totalHoursDecimal - 8);
+    const overtimeHours = parseFloat(overtimeHoursDecimal.toFixed(2));
+
+    // Insert or update work_hours record
+    await db.execute(
+      `INSERT INTO work_hours 
+       (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours, overtime_hours)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+       check_out_time = VALUES(check_out_time),
+       total_hours = VALUES(total_hours),
+       overtime_hours = VALUES(overtime_hours),
+       updated_at = CURRENT_TIMESTAMP`,
+      [
+        userId,
+        att.id,
+        att.attendance_date,
+        att.check_in_time,
+        nowTime,
+        totalHours,
+        overtimeHours
+      ]
+    );
+
+    await logAudit(userId, 'checkout_marked', { 
+      attendance_id: att.id,
+      total_hours: totalHours,
+      overtime_hours: overtimeHours
+    });
+
+    res.json({ 
+      message: 'Checkout marked successfully',
+      total_hours: totalHours,
+      overtime_hours: overtimeHours
+    });
+  } catch (error) {
+    console.error('Mark checkout error:', error);
+    res.status(500).json({ error: 'Failed to mark checkout' });
   }
 }
