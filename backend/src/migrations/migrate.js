@@ -306,6 +306,19 @@ async function migrate() {
     `);
     console.log('✓ Created notifications table');
 
+    // Create admin notes table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS admin_notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
+        INDEX idx_admin_notes_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Created admin_notes table');
+
     // Create settings table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS settings (
