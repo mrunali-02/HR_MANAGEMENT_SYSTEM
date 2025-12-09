@@ -28,6 +28,17 @@ const TABS = {
   SETTINGS: 'settings',
 };
 
+const SETTINGS_TABS = {
+  ACCOUNT: 'account',
+  ATTENDANCE: 'attendance',
+  WORK_HOURS: 'workHours',
+  LEAVE_POLICY: 'leavePolicy',
+  SECURITY: 'security',
+  REPORTS: 'reports',
+  NOTIFICATIONS: 'notifications',
+  COMPANY: 'company',
+};
+
 function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -72,12 +83,99 @@ function AdminDashboard() {
     newPassword: '',
   });
 
+  // Settings State
+  const [settingsActiveTab, setSettingsActiveTab] = useState(SETTINGS_TABS.ACCOUNT);
+  const [settings, setSettings] = useState({
+    attendance: {
+      autoAttendance: true,
+      allowManualAttendance: true,
+      geoFenceRange: 100,
+      requireGPS: true,
+      attendanceCutoffTime: '10:00',
+    },
+    workHours: {
+      maxWorkHoursPerDay: 9,
+      overtimeRateMultiplier: 1.5,
+      allowOvertimeSubmission: true,
+      requireReasonForOvertime: true,
+    },
+    leavePolicy: {
+      annualLeave: 20,
+      sickLeave: 10,
+      carryForward: true,
+      maxLeavePerRequest: 14,
+      autoApproveIfLessThanHours: false,
+    },
+    security: {
+      passwordMinLength: 8,
+      passwordExpireInDays: 90,
+      maxLoginAttempts: 5,
+      enableTwoFactorAuth: false,
+      enableRememberMe: true,
+    },
+    reports: {
+      defaultExportFormat: 'PDF',
+      allowScheduledReports: true,
+      reportRetentionDays: 365,
+    },
+    notifications: {
+      notifyHRForLeaveRequests: true,
+      notifyEmployeeOnApproval: true,
+      enableEmailAlerts: true,
+      enableSMSAlerts: false,
+    },
+    company: {
+      companyName: 'TechCorp Solutions',
+      timeZone: 'UTC',
+      dateFormat: 'YYYY-MM-DD',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    }
+  });
+
+  const handleSettingChange = (category, field, value) => {
+    setSettings(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        [field]: value
+      }
+    }));
+  };
+
+  const saveSettings = async (category) => {
+    try {
+      const token = localStorage.getItem('token');
+      const settingsValue = settings[category];
+
+      await axios.put(
+        `${API_BASE_URL}/admin/settings/${category}`,
+        { value: settingsValue },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setTabSuccess({ [TABS.SETTINGS]: `${category} settings saved successfully!` });
+      setTimeout(() => setTabSuccess(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.SETTINGS];
+        return newState;
+      }), 3000);
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      setTabErrors({ [TABS.SETTINGS]: err.response?.data?.error || 'Failed to save settings.' });
+      setTimeout(() => setTabErrors(prev => {
+        const newState = { ...prev };
+        delete newState[TABS.SETTINGS];
+        return newState;
+      }), 5000);
+    }
+  };
+
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/admin/login');
       return;
     }
-    Promise.all([fetchUsers(), fetchLeaveApplications()]).finally(() => {
+    Promise.all([fetchUsers(), fetchLeaveApplications(), fetchSettings()]).finally(() => {
       setLoading(false);
     });
   }, [user, navigate]);
@@ -104,6 +202,28 @@ function AdminDashboard() {
     setTabErrors({});
     setTabSuccess({});
   }, [activeTab]);
+
+  const fetchSettings = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/admin/settings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.settings) {
+        setSettings(prev => ({
+          ...prev,
+          ...Object.keys(response.data.settings).reduce((acc, key) => {
+            // Merge existing defaults with fetched data to ensure structure
+            acc[key] = { ...prev[key], ...response.data.settings[key] };
+            return acc;
+          }, {})
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+      // Don't show error to user immediately, just use defaults
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -229,7 +349,7 @@ function AdminDashboard() {
       phone: '',
       joined_on: '',
       address: '',
-      contact_number: '',
+      status: 'active',
     });
     setSelectedEmployee(null);
   };
@@ -253,7 +373,7 @@ function AdminDashboard() {
             phone: formData.phone || null,
             joined_on: formData.joined_on || null,
             address: formData.address || null,
-            contact_number: formData.contact_number || null,
+            status: formData.status || 'active',
           },
           {
             headers: {
@@ -443,13 +563,12 @@ function AdminDashboard() {
       employee_id: employee.employee_id || '',
       name: employee.name || '',
       email: employee.email,
-      password: '',
       role: employee.role || 'employee',
       department: employee.department || '',
       phone: employee.phone || '',
       joined_on: employee.joined_on ? employee.joined_on.substring(0, 10) : '',
       address: employee.address || '',
-      contact_number: employee.contact_number || '',
+      status: employee.status || 'active',
     });
   };
 
@@ -472,144 +591,152 @@ function AdminDashboard() {
         >
           {showAddForm ? 'Cancel' : 'Add Employee'}
         </button>
-      </div>
+      </div >
 
-      {tabErrors[TABS.EMPLOYEES] && (
-        <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
-          {tabErrors[TABS.EMPLOYEES]}
-        </div>
-      )}
+      {
+        tabErrors[TABS.EMPLOYEES] && (
+          <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">
+            {tabErrors[TABS.EMPLOYEES]}
+          </div>
+        )
+      }
 
-      {tabSuccess[TABS.EMPLOYEES] && (
-        <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-2">
-          {tabSuccess[TABS.EMPLOYEES]}
-        </div>
-      )}
+      {
+        tabSuccess[TABS.EMPLOYEES] && (
+          <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-2">
+            {tabSuccess[TABS.EMPLOYEES]}
+          </div>
+        )
+      }
 
-      {showAddForm && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium mb-4">
-            {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
-          </h3>
-          <form onSubmit={handleAddOrUpdateEmployee}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
-                  value={formData.employee_id}
-                  readOnly
-                  disabled
-                />
-              </div>
+      {
+        showAddForm && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <h3 className="text-lg font-medium mb-4">
+              {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
+            </h3>
+            <form onSubmit={handleAddOrUpdateEmployee}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                    value={formData.employee_id}
+                    readOnly
+                    disabled
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    required={!selectedEmployee}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    disabled={!!selectedEmployee}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                  <input
+                    type="password"
+                    required={!selectedEmployee}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={selectedEmployee ? 'Leave blank to keep current password' : ''}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.role}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        role: e.target.value,
+                        employee_id: selectedEmployee ? prev.employee_id : generateEmployeeId(e.target.value),
+                      }))
+                    }
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="hr">HR</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Department</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Joined On</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.joined_on}
+                    onChange={(e) => setFormData({ ...formData, joined_on: e.target.value })}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <textarea
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    rows={2}
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  required={!selectedEmployee}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  disabled={!!selectedEmployee}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
-                <input
-                  type="password"
-                  required={!selectedEmployee}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder={selectedEmployee ? 'Leave blank to keep current password' : ''}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Role</label>
-                <select
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.role}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      role: e.target.value,
-                      employee_id: selectedEmployee ? prev.employee_id : generateEmployeeId(e.target.value),
-                    }))
-                  }
+              <div className="mt-4">
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm"
                 >
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="hr">HR</option>
-                </select>
+                  {selectedEmployee ? 'Save Changes' : 'Create Employee'}
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Department</label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Phone</label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Joined On</label>
-                <input
-                  type="date"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.joined_on}
-                  onChange={(e) => setFormData({ ...formData, joined_on: e.target.value })}
-                />
-              </div>
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Address</label>
-                <textarea
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  rows={2}
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Contact Number</label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.contact_number}
-                  onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <button
-                type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm"
-              >
-                {selectedEmployee ? 'Save Changes' : 'Create Employee'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+            </form>
+          </div>
+        )
+      }
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
@@ -638,7 +765,7 @@ function AdminDashboard() {
                   Joined On
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Contact Number
+                  Status
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created At
@@ -671,8 +798,11 @@ function AdminDashboard() {
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                     {u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}
                   </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                    {u.contact_number || '-'}
+                  <td className="px-4 py-2 whitespace-nowrap text-sm">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                      {u.status || 'active'}
+                    </span>
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
@@ -703,7 +833,7 @@ function AdminDashboard() {
           </table>
         </div>
       </div>
-    </div>
+    </div >
   );
 
   const renderLeaveApplications = () => (
@@ -1000,100 +1130,400 @@ function AdminDashboard() {
     );
   };
 
-  // ✅ Settings renderer now pure (no hooks)
-  const renderSettings = () => (
-    <div className="space-y-6 max-w-2xl">
-      <h2 className="text-2xl font-bold text-gray-900">Account Settings</h2>
+  const renderSettings = () => {
+    const renderAccountSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Profile & Password</h3>
 
-      {/* Profile Update */}
-      <div className="bg-white rounded-xl shadow p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Profile Details</h3>
+        {/* Profile Update */}
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <h4 className="font-medium text-gray-700">Profile Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input
+                type="text"
+                className="mt-1 w-full border rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={profileInfo.name}
+                onChange={(e) => setProfileInfo({ ...profileInfo, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                className="mt-1 w-full border rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={profileInfo.email}
+                onChange={(e) => setProfileInfo({ ...profileInfo, email: e.target.value })}
+              />
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const token = localStorage.getItem('token');
+                await axios.put(`${API_BASE_URL}/admin/profile/update`, profileInfo, { headers: { Authorization: `Bearer ${token}` } });
+                setTabSuccess({ [TABS.SETTINGS]: 'Profile updated!' });
+              } catch (err) { setTabErrors({ [TABS.SETTINGS]: 'Failed to update profile' }); }
+            }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded shadow-sm hover:bg-indigo-700"
+          >
+            Save Profile
+          </button>
+        </div>
 
-        <input
-          type="text"
-          className="w-full border rounded p-2"
-          value={profileInfo.name}
-          onChange={(e) => setProfileInfo({ ...profileInfo, name: e.target.value })}
-          placeholder="Your Name"
-        />
-
-        <input
-          type="email"
-          className="w-full border rounded p-2"
-          value={profileInfo.email}
-          onChange={(e) => setProfileInfo({ ...profileInfo, email: e.target.value })}
-          placeholder="Your Email"
-        />
-
-        <button
-          onClick={async () => {
-            try {
-              const token = localStorage.getItem('token');
-              await axios.put(
-                `${API_BASE_URL}/admin/profile/update`,
-                profileInfo,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              alert('Profile updated!');
-            } catch (err) {
-              alert(err.response?.data?.error || 'Failed to update');
-            }
-          }}
-          className="bg-indigo-600 text-white px-4 py-2 rounded"
-        >
-          Save Profile
-        </button>
+        {/* Password Change */}
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <h4 className="font-medium text-gray-700">Change Password</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Current Password</label>
+              <input
+                type="password"
+                className="mt-1 w-full border rounded-md p-2"
+                value={passwordData.currentPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">New Password</label>
+              <input
+                type="password"
+                className="mt-1 w-full border rounded-md p-2"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+              />
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!passwordData.currentPassword || !passwordData.newPassword) return alert('Fill both fields');
+              try {
+                const token = localStorage.getItem('token');
+                await axios.put(`${API_BASE_URL}/admin/profile/change-password`, passwordData, { headers: { Authorization: `Bearer ${token}` } });
+                setTabSuccess({ [TABS.SETTINGS]: 'Password updated!' });
+                setPasswordData({ currentPassword: '', newPassword: '' });
+              } catch (err) { setTabErrors({ [TABS.SETTINGS]: 'Failed to change password' }); }
+            }}
+            className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700"
+          >
+            Update Password
+          </button>
+        </div>
       </div>
+    );
 
-      {/* Password Change */}
-      <div className="bg-white rounded-xl shadow p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
-
-        <input
-          type="password"
-          className="w-full border rounded p-2"
-          placeholder="Current Password"
-          value={passwordData.currentPassword}
-          onChange={(e) =>
-            setPasswordData({ ...passwordData, currentPassword: e.target.value })
-          }
-        />
-
-        <input
-          type="password"
-          className="w-full border rounded p-2"
-          placeholder="New Password"
-          value={passwordData.newPassword}
-          onChange={(e) =>
-            setPasswordData({ ...passwordData, newPassword: e.target.value })
-          }
-        />
-
-        <button
-          onClick={async () => {
-            if (!passwordData.currentPassword || !passwordData.newPassword) {
-              return alert('Fill both fields');
-            }
-            try {
-              const token = localStorage.getItem('token');
-              await axios.put(
-                `${API_BASE_URL}/admin/profile/change-password`,
-                passwordData,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              alert('Password updated');
-              setPasswordData({ currentPassword: '', newPassword: '' });
-            } catch (err) {
-              alert(err.response?.data?.error || 'Failed to change password');
-            }
-          }}
-          className="bg-green-600 text-white px-4 py-2 rounded"
-        >
-          Update Password
-        </button>
+    const renderAttendanceSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Attendance Configuration</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Auto Attendance (Check-in/out)</label>
+            <input
+              type="checkbox"
+              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              checked={settings.attendance.autoAttendance}
+              onChange={(e) => handleSettingChange('attendance', 'autoAttendance', e.target.checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Allow Manual Attendance</label>
+            <input
+              type="checkbox"
+              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              checked={settings.attendance.allowManualAttendance}
+              onChange={(e) => handleSettingChange('attendance', 'allowManualAttendance', e.target.checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Require GPS Location</label>
+            <input
+              type="checkbox"
+              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              checked={settings.attendance.requireGPS}
+              onChange={(e) => handleSettingChange('attendance', 'requireGPS', e.target.checked)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Geo-Fence Range (meters)</label>
+            <input
+              type="number"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              value={settings.attendance.geoFenceRange}
+              onChange={(e) => handleSettingChange('attendance', 'geoFenceRange', parseInt(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Attendance Cutoff Time</label>
+            <input
+              type="time"
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              value={settings.attendance.attendanceCutoffTime}
+              onChange={(e) => handleSettingChange('attendance', 'attendanceCutoffTime', e.target.value)}
+            />
+          </div>
+          <button
+            onClick={() => saveSettings('attendance')}
+            className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          >
+            Save Attendance Settings
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+
+    const renderWorkHoursSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Work Hours & Overtime</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Max Work Hours Per Day</label>
+            <input type="number" className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              value={settings.workHours.maxWorkHoursPerDay}
+              onChange={(e) => handleSettingChange('workHours', 'maxWorkHoursPerDay', parseFloat(e.target.value))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Overtime Rate Multiplier</label>
+            <input type="number" step="0.1" className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              value={settings.workHours.overtimeRateMultiplier}
+              onChange={(e) => handleSettingChange('workHours', 'overtimeRateMultiplier', parseFloat(e.target.value))} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Allow Overtime Submission</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.workHours.allowOvertimeSubmission}
+              onChange={(e) => handleSettingChange('workHours', 'allowOvertimeSubmission', e.target.checked)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Require Reason for Overtime</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.workHours.requireReasonForOvertime}
+              onChange={(e) => handleSettingChange('workHours', 'requireReasonForOvertime', e.target.checked)} />
+          </div>
+          <button onClick={() => saveSettings('workHours')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Work Settings</button>
+        </div>
+      </div>
+    );
+
+    const renderLeavePolicySettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Leave Policy</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Annual Leave (Days)</label>
+              <input type="number" className="mt-1 block w-full border rounded-md p-2"
+                value={settings.leavePolicy.annualLeave}
+                onChange={(e) => handleSettingChange('leavePolicy', 'annualLeave', parseInt(e.target.value))} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Sick Leave (Days)</label>
+              <input type="number" className="mt-1 block w-full border rounded-md p-2"
+                value={settings.leavePolicy.sickLeave}
+                onChange={(e) => handleSettingChange('leavePolicy', 'sickLeave', parseInt(e.target.value))} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Carry Forward Unused Leave</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.leavePolicy.carryForward}
+              onChange={(e) => handleSettingChange('leavePolicy', 'carryForward', e.target.checked)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Max Leave Per Request (Days)</label>
+            <input type="number" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.leavePolicy.maxLeavePerRequest}
+              onChange={(e) => handleSettingChange('leavePolicy', 'maxLeavePerRequest', parseInt(e.target.value))} />
+          </div>
+          <button onClick={() => saveSettings('leavePolicy')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Leave Policy</button>
+        </div>
+      </div>
+    );
+
+    const renderSecuritySettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">System Security</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Minimum Password Length</label>
+            <input type="number" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.security.passwordMinLength}
+              onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Password Expiry (Days)</label>
+            <input type="number" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.security.passwordExpireInDays}
+              onChange={(e) => handleSettingChange('security', 'passwordExpireInDays', parseInt(e.target.value))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Max Login Attempts</label>
+            <input type="number" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.security.maxLoginAttempts}
+              onChange={(e) => handleSettingChange('security', 'maxLoginAttempts', parseInt(e.target.value))} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Enable Two-Factor Authentication</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.security.enableTwoFactorAuth}
+              onChange={(e) => handleSettingChange('security', 'enableTwoFactorAuth', e.target.checked)} />
+          </div>
+          <button onClick={() => saveSettings('security')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Security Settings</button>
+        </div>
+      </div>
+    );
+
+    const renderReportsSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Export & Reports</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Default Export Format</label>
+            <select className="mt-1 block w-full border rounded-md p-2"
+              value={settings.reports.defaultExportFormat}
+              onChange={(e) => handleSettingChange('reports', 'defaultExportFormat', e.target.value)}>
+              <option value="PDF">PDF</option>
+              <option value="CSV">CSV</option>
+              <option value="XLSX">Excel (XLSX)</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Allow Scheduled Reports</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.reports.allowScheduledReports}
+              onChange={(e) => handleSettingChange('reports', 'allowScheduledReports', e.target.checked)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Report Retention (Days)</label>
+            <input type="number" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.reports.reportRetentionDays}
+              onChange={(e) => handleSettingChange('reports', 'reportRetentionDays', parseInt(e.target.value))} />
+          </div>
+          <button onClick={() => saveSettings('reports')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Report Settings</button>
+        </div>
+      </div>
+    );
+
+    const renderNotificationsSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Notification Preferences</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Notify HR for Leave Requests</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.notifications.notifyHRForLeaveRequests}
+              onChange={(e) => handleSettingChange('notifications', 'notifyHRForLeaveRequests', e.target.checked)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Notify Employee on Approval</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.notifications.notifyEmployeeOnApproval}
+              onChange={(e) => handleSettingChange('notifications', 'notifyEmployeeOnApproval', e.target.checked)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Enable Email Alerts</label>
+            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
+              checked={settings.notifications.enableEmailAlerts}
+              onChange={(e) => handleSettingChange('notifications', 'enableEmailAlerts', e.target.checked)} />
+          </div>
+          <button onClick={() => saveSettings('notifications')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Notification Settings</button>
+        </div>
+      </div>
+    );
+
+    const renderCompanySettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Company Configuration</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Company Name</label>
+            <input type="text" className="mt-1 block w-full border rounded-md p-2"
+              value={settings.company.companyName}
+              onChange={(e) => handleSettingChange('company', 'companyName', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Time Zone</label>
+            <select className="mt-1 block w-full border rounded-md p-2"
+              value={settings.company.timeZone}
+              onChange={(e) => handleSettingChange('company', 'timeZone', e.target.value)}>
+              <option value="UTC">UTC</option>
+              <option value="EST">EST</option>
+              <option value="PST">PST</option>
+              <option value="IST">IST</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Date Format</label>
+            <select className="mt-1 block w-full border rounded-md p-2"
+              value={settings.company.dateFormat}
+              onChange={(e) => handleSettingChange('company', 'dateFormat', e.target.value)}>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+            </select>
+          </div>
+          <button onClick={() => saveSettings('company')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Company Settings</button>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="flex flex-col lg:flex-row gap-6 h-full">
+        {/* Settings Navigation Sidebar */}
+        <div className="w-full lg:w-64 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-fit">
+          <div className="p-4 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900">Settings</h2>
+          </div>
+          <nav className="flex flex-col">
+            {Object.entries({
+              [SETTINGS_TABS.ACCOUNT]: 'Account & Profile',
+              [SETTINGS_TABS.ATTENDANCE]: 'Attendance',
+              [SETTINGS_TABS.WORK_HOURS]: 'Work Hours & OT',
+              [SETTINGS_TABS.LEAVE_POLICY]: 'Leave Policy',
+              [SETTINGS_TABS.SECURITY]: 'Security',
+              [SETTINGS_TABS.REPORTS]: 'Reports',
+              [SETTINGS_TABS.NOTIFICATIONS]: 'Notifications',
+              [SETTINGS_TABS.COMPANY]: 'Company Info'
+            }).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSettingsActiveTab(key)}
+                className={`text-left px-4 py-3 text-sm font-medium transition-colors border-l-4 ${settingsActiveTab === key
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Settings Content Area */}
+        <div className="flex-1 bg-gray-50 rounded-xl p-1">
+          {tabSuccess[TABS.SETTINGS] && (
+            <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+              {tabSuccess[TABS.SETTINGS]}
+            </div>
+          )}
+          {tabErrors[TABS.SETTINGS] && (
+            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+              {tabErrors[TABS.SETTINGS]}
+            </div>
+          )}
+
+          {settingsActiveTab === SETTINGS_TABS.ACCOUNT && renderAccountSettings()}
+          {settingsActiveTab === SETTINGS_TABS.ATTENDANCE && renderAttendanceSettings()}
+          {settingsActiveTab === SETTINGS_TABS.WORK_HOURS && renderWorkHoursSettings()}
+          {settingsActiveTab === SETTINGS_TABS.LEAVE_POLICY && renderLeavePolicySettings()}
+          {settingsActiveTab === SETTINGS_TABS.SECURITY && renderSecuritySettings()}
+          {settingsActiveTab === SETTINGS_TABS.REPORTS && renderReportsSettings()}
+          {settingsActiveTab === SETTINGS_TABS.NOTIFICATIONS && renderNotificationsSettings()}
+          {settingsActiveTab === SETTINGS_TABS.COMPANY && renderCompanySettings()}
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (

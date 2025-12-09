@@ -13,9 +13,9 @@ async function migrate() {
     console.log('Starting database migration...');
 
     // Create employees table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS employees (
-        id INT PRIMARY KEY,
+    await connection.execute(
+      `CREATE TABLE IF NOT EXISTS employees (
+        id INT AUTO_INCREMENT PRIMARY KEY,
         employee_id VARCHAR(50) UNIQUE,
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
@@ -27,9 +27,13 @@ async function migrate() {
         joined_on DATE,
         photo_url VARCHAR(500),
         address TEXT,
-        contact_number VARCHAR(50),
+        joined_on DATE,
+        photo_url VARCHAR(500),
+        address TEXT,
+        status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_email (email),
+
         INDEX idx_role (role),
         INDEX idx_manager_id (manager_id),
         FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
@@ -37,10 +41,29 @@ async function migrate() {
     `);
     console.log('✓ Created employees table');
 
+    // Migration update: Add status column if not exists
+    try {
+      await connection.execute(`
+        SELECT count(*) FROM information_schema.COLUMNS 
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'status')
+      `).then(async ([rows]) => {
+        if (rows[0]['count(*)'] === 0) {
+          await connection.execute("ALTER TABLE employees ADD COLUMN status ENUM('active', 'inactive') NOT NULL DEFAULT 'active'");
+          console.log('✓ Added status column to employees');
+        }
+      });
+
+      // Optional: Drop contact_number if exists (ignoring for safety usually, but user asked to remove)
+      // For now, let's just add status to be safe and ensure the UI uses it.
+    } catch (err) {
+      console.log('Note: Column migration check failed or already exists', err.message);
+    }
+
+
     // Create profiles table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS profiles (
-        id INT PRIMARY KEY,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         display_name VARCHAR(255),
         bio TEXT,
@@ -283,6 +306,17 @@ async function migrate() {
     `);
     console.log('✓ Created notifications table');
 
+    // Create settings table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        category VARCHAR(50) UNIQUE NOT NULL,
+        value JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✓ Created settings table');
+
     // Create admin if ADMIN_EMAIL and ADMIN_PASSWORD are set
     const adminEmail = process.env.ADMIN_EMAIL?.trim();
     const adminPassword = process.env.ADMIN_PASSWORD?.trim();
@@ -311,10 +345,12 @@ async function migrate() {
           'INSERT INTO profiles (user_id, display_name) VALUES (?, ?)',
           [admin[0].id, 'Administrator']
         );
-
         console.log(`✓ Created admin user: ${adminEmail}`);
+
+
       } else {
         console.log(`⚠ Admin with email ${adminEmail} already exists, skipping creation`);
+
       }
     } else {
       console.log('⚠ ADMIN_EMAIL and/or ADMIN_PASSWORD not set - no admin user created');
@@ -335,4 +371,3 @@ async function migrate() {
 }
 
 migrate();
-

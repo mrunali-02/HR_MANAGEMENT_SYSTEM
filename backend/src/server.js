@@ -6,6 +6,7 @@ import adminRoutes from './routes/admin.js';
 import hrRoutes from './routes/hr.js';
 import managerRoutes from './routes/manager.js';
 import userRoutes from './routes/users.js';
+import settingsRoutes from './routes/settingsRoutes.js';
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/settings', settingsRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api', userRoutes);
