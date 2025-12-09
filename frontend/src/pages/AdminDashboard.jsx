@@ -497,10 +497,10 @@ function AdminDashboard() {
                 <label className="block text-sm font-medium text-gray-700">Employee ID</label>
                 <input
                   type="text"
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
                   value={formData.employee_id}
-                  onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
-                  disabled={!!selectedEmployee}
+                  readOnly
+                  disabled
                 />
               </div>
 
@@ -765,10 +765,10 @@ function AdminDashboard() {
                   <td className="px-4 py-2 whitespace-nowrap">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${la.status === 'approved'
-                          ? 'bg-green-100 text-green-800'
-                          : la.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                        ? 'bg-green-100 text-green-800'
+                        : la.status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
                         }`}
                     >
                       {la.status}
@@ -1114,8 +1114,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.DASHBOARD)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Dashboard
@@ -1123,8 +1123,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.EMPLOYEES)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.EMPLOYEES
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Employee List
@@ -1132,8 +1132,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.LEAVE_APPLICATIONS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVE_APPLICATIONS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Leave Applications
@@ -1141,8 +1141,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.AUDIT_LOGS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Audit Logs
@@ -1150,8 +1150,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.REPORTS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Reports
@@ -1159,8 +1159,8 @@ function AdminDashboard() {
           <button
             onClick={() => setActiveTab(TABS.SETTINGS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.SETTINGS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
           >
             Settings
