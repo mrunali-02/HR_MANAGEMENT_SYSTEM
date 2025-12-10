@@ -341,7 +341,9 @@ function AdminDashboard() {
   const resetForm = () => {
     setFormData({
       employee_id: '',
-      name: '',
+      first_name: '',
+      middle_name: '',
+      last_name: '',
       email: '',
       password: '',
       role: 'employee',
@@ -367,7 +369,9 @@ function AdminDashboard() {
         await axios.put(
           `${API_BASE_URL}/admin/employees/${selectedEmployee.id}`,
           {
-            name: formData.name,
+            first_name: formData.first_name,
+            middle_name: formData.middle_name,
+            last_name: formData.last_name,
             role: formData.role,
             department: formData.department || null,
             phone: formData.phone || null,
@@ -518,7 +522,8 @@ function AdminDashboard() {
               {users.slice(0, 5).map((u) => (
                 <tr key={u.id}>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    {u.name || u.email}
+                    {`${u.first_name ?? ''} ${u.middle_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email}
+
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{u.email}</td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 capitalize">
@@ -561,7 +566,9 @@ function AdminDashboard() {
     });
     setFormData({
       employee_id: employee.employee_id || '',
-      name: employee.name || '',
+      first_name: employee.first_name || '',
+      middle_name: employee.middle_name || '',
+      last_name: employee.last_name || '',
       email: employee.email,
       role: employee.role || 'employee',
       department: employee.department || '',
@@ -629,14 +636,38 @@ function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
                   <input
                     type="text"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    placeholder="Last Name"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">First Name</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    placeholder="First Name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Middle Name <span className="text-gray-400 text-xs">(Optional)</span></label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.middle_name}
+                    onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })}
+                    placeholder="Middle Name"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Email</label>
                   <input
@@ -702,6 +733,8 @@ function AdminDashboard() {
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.joined_on}
                     onChange={(e) => setFormData({ ...formData, joined_on: e.target.value })}
+                    onKeyDown={(e) => e.preventDefault()}
+                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
                   />
                 </div>
                 <div className="lg:col-span-2">
@@ -786,7 +819,8 @@ function AdminDashboard() {
                     className="px-4 py-2 whitespace-nowrap text-sm text-indigo-600 cursor-pointer hover:underline"
                     onClick={() => handleEditClick(u)}
                   >
-                    {u.name || u.email}
+                    {`${u.first_name ?? ''} ${u.middle_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email}
+
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{u.email}</td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">

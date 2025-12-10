@@ -60,7 +60,7 @@ export async function adminLogin(req, res) {
 ====================== */
 export async function addEmployee(req, res) {
   try {
-    const { email, password, name, role, employee_id, department, phone, joined_on, address, contact_number } = req.body;
+    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, contact_number, status } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -77,11 +77,14 @@ export async function addEmployee(req, res) {
 
     const hashedPassword = await hashPassword(password);
 
+    // Construct full name for backward compatibility
+    const fullName = name || `${last_name || ''}, ${first_name || ''} ${middle_name || ''}`.trim().replace(/\s+/g, ' ');
+
     const [result] = await db.execute(
       `INSERT INTO employees (
-        email, password_hash, name, role, employee_id, department, phone, joined_on, address, contact_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [email, hashedPassword, name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, contact_number || null]
+        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, contact_number, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, status || 'active']
     );
 
     await db.execute('INSERT INTO profiles (user_id, display_name) VALUES (?, ?)', [result.insertId, name || email]);
@@ -109,6 +112,10 @@ export async function getUsers(req, res) {
         e.employee_id, 
         e.email, 
         e.name, 
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        e.status, 
         e.role, 
         e.department, 
         e.phone, 
@@ -203,17 +210,23 @@ export async function assignManager(req, res) {
 export async function updateEmployee(req, res) {
   try {
     const { id } = req.params;
-    const { name, role, department, phone, joined_on, address, contact_number } = req.body;
+    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, contact_number, status } = req.body;
 
     if (parseInt(id) === req.user.id && role && role !== req.user.role) {
       return res.status(400).json({ error: 'You cannot change your own role' });
     }
 
+    // Construct full name for backward compatibility
+    let fullName = name;
+    if (!name && (first_name || last_name)) {
+      fullName = `${last_name || ''}, ${first_name || ''} ${middle_name || ''}`.trim().replace(/\s+/g, ' ');
+    }
+
     await db.execute(
       `UPDATE employees SET
-        name=?, role=?, department=?, phone=?, joined_on=?, address=?, contact_number=? 
+        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, contact_number=?, status=? 
        WHERE id=?`,
-      [name || null, role || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, id]
+      [fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, status || 'active', id]
     );
 
     res.json({ message: 'Employee updated successfully' });
