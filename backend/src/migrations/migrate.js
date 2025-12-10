@@ -50,6 +50,20 @@ async function migrate() {
         }
       });
 
+      // Migration update: Add name parts columns
+      const nameCols = ['first_name', 'middle_name', 'last_name'];
+      for (const col of nameCols) {
+        await connection.execute(`
+          SELECT count(*) FROM information_schema.COLUMNS 
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col}')
+        `).then(async ([rows]) => {
+          if (rows[0]['count(*)'] === 0) {
+            await connection.execute(`ALTER TABLE employees ADD COLUMN ${col} VARCHAR(100)`);
+            console.log(`✓ Added ${col} column to employees`);
+          }
+        });
+      }
+
       // Drop contact_number if exists (cleanup)
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 

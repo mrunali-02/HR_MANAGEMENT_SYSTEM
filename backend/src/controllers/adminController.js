@@ -103,7 +103,7 @@ export async function adminLogin(req, res) {
     }
 
     const [users] = await db.execute(
-      'SELECT id, email, password_hash, role, name FROM employees WHERE email = ? AND role = ?',
+      'SELECT id, email, password_hash, role, REPLACE(name, \',\', \'\') AS name FROM employees WHERE email = ? AND role = ?',
       [email, 'admin']
     );
 
@@ -169,7 +169,7 @@ export async function addEmployee(req, res) {
     const hashedPassword = await hashPassword(password);
 
     // Construct full name for backward compatibility
-    const fullName = name || `${last_name || ''}, ${first_name || ''} ${middle_name || ''}`.trim().replace(/\s+/g, ' ');
+    const fullName = name || `${first_name || ''} ${middle_name || ''} ${last_name || ''}`.trim().replace(/\s+/g, ' ');
 
     const [result] = await db.execute(
       `INSERT INTO employees (
@@ -202,7 +202,7 @@ export async function getUsers(req, res) {
         e.id, 
         e.employee_id, 
         e.email, 
-        e.name, 
+        REPLACE(e.name, ',', '') AS name, 
         e.first_name,
         e.middle_name,
         e.last_name,
@@ -215,7 +215,7 @@ export async function getUsers(req, res) {
         e.status,
         e.manager_id,
         e.created_at,
-        m.name AS manager_name,
+        REPLACE(m.name, ',', '') AS manager_name,
         m.email AS manager_email
       FROM employees e
       LEFT JOIN employees m ON e.manager_id = m.id
@@ -231,7 +231,7 @@ export async function getUsers(req, res) {
 export async function getManagers(req, res) {
   try {
     const [managers] = await db.execute(`
-      SELECT id, name, email, role
+      SELECT id, REPLACE(name, ',', '') AS name, email, role
       FROM employees 
       WHERE role = 'manager'
       ORDER BY name ASC
@@ -301,38 +301,27 @@ export async function assignManager(req, res) {
 export async function updateEmployee(req, res) {
   try {
     const { id } = req.params;
-<<<<<<< HEAD
-    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, contact_number, status } = req.body;
-=======
-    const { name, role, department, phone, joined_on, address, status } = req.body;
->>>>>>> ae56512 (my local updates)
+    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, status } = req.body;
 
     if (parseInt(id) === req.user.id && role && role !== req.user.role) {
       return res.status(400).json({ error: 'You cannot change your own role' });
     }
 
-<<<<<<< HEAD
     // Construct full name for backward compatibility
     let fullName = name;
     if (!name && (first_name || last_name)) {
-      fullName = `${last_name || ''}, ${first_name || ''} ${middle_name || ''}`.trim().replace(/\s+/g, ' ');
-=======
+      fullName = `${first_name || ''} ${middle_name || ''} ${last_name || ''}`.trim().replace(/\s+/g, ' ');
+    }
+
     if (status && !['active', 'inactive'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
->>>>>>> ae56512 (my local updates)
     }
 
     await db.execute(
       `UPDATE employees SET
-<<<<<<< HEAD
-        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, contact_number=?, status=? 
+        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=? 
        WHERE id=?`,
-      [fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, status || 'active', id]
-=======
-        name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=?
-       WHERE id=?`,
-      [name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active', id]
->>>>>>> ae56512 (my local updates)
+      [fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active', id]
     );
 
     res.json({ message: 'Employee updated successfully' });
@@ -368,12 +357,12 @@ export async function deleteUser(req, res) {
 export async function getLeaveRequests(req, res) {
   try {
     const [requests] = await db.execute(`
-      SELECT lr.id, lr.user_id, e.name AS employee_name, e.email AS employee_email,
-             lr.type, lr.start_date, lr.end_date, lr.reason, lr.status, lr.created_at
+      SELECT lr.id, lr.user_id, REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email,
+      lr.type, lr.start_date, lr.end_date, lr.reason, lr.status, lr.created_at
       FROM leave_requests lr
       JOIN employees e ON lr.user_id = e.id
       ORDER BY lr.created_at DESC
-    `);
+      `);
 
     res.json({ requests });
   } catch (error) {
@@ -388,11 +377,11 @@ export async function getLeaveStatistics(req, res) {
     const [stats] = await db.execute(`
       SELECT 
         type,
-        COUNT(*) as count
+      COUNT(*) as count
       FROM leave_requests
       WHERE YEAR(start_date) = ? OR YEAR(end_date) = ?
       GROUP BY type
-    `, [currentYear, currentYear]);
+      `, [currentYear, currentYear]);
 
     // Initialize counts
     const leaveCounts = {
@@ -447,22 +436,22 @@ export async function getHrAnalytics(req, res) {
     const [[summary]] = await db.execute(`
       SELECT
         (SELECT COUNT(*) FROM employees) AS totalEmployees,
-        (SELECT COUNT(*) FROM employees WHERE role='manager') AS totalManagers,
-        (SELECT COUNT(*) FROM employees WHERE role='hr') AS totalHr,
-        (SELECT COUNT(*) FROM employees WHERE role='employee') AS totalRegulars,
-        (SELECT COUNT(*) FROM leave_requests WHERE status='approved') AS approvedLeaves,
-        (SELECT COUNT(*) FROM leave_requests WHERE status='pending') AS pendingLeaves,
-        (SELECT COUNT(*) FROM leave_requests WHERE status='rejected') AS rejectedLeaves
-    `);
+      (SELECT COUNT(*) FROM employees WHERE role = 'manager') AS totalManagers,
+        (SELECT COUNT(*) FROM employees WHERE role = 'hr') AS totalHr,
+          (SELECT COUNT(*) FROM employees WHERE role = 'employee') AS totalRegulars,
+            (SELECT COUNT(*) FROM leave_requests WHERE status = 'approved') AS approvedLeaves,
+              (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS pendingLeaves,
+                (SELECT COUNT(*) FROM leave_requests WHERE status = 'rejected') AS rejectedLeaves
+                  `);
 
     const [deptStats] = await db.execute(`
       SELECT department, COUNT(*) AS count FROM employees WHERE department IS NOT NULL GROUP BY department
-    `);
+      `);
 
     const [leaveDeptStats] = await db.execute(`
       SELECT e.department, COUNT(*) AS leaveCount
       FROM leave_requests lr 
-      JOIN employees e ON lr.user_id=e.id 
+      JOIN employees e ON lr.user_id = e.id 
       GROUP BY e.department
     `);
 
@@ -679,7 +668,7 @@ export async function createHoliday(req, res) {
     );
 
     await logAudit(req.user.id, 'holiday_created', { holiday_id: result.insertId, name, date: holiday_date });
-    await createNotification(null, `New holiday added: ${name} on ${holiday_date}`);
+    await createNotification(null, `New holiday added: ${name} on ${holiday_date} `);
     res.status(201).json({ id: result.insertId, name, holiday_date, description });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -788,16 +777,16 @@ export async function deleteLeavePolicy(req, res) {
 export async function getAttendanceCorrections(req, res) {
   try {
     const [corrections] = await db.execute(`
-      SELECT 
-        ac.id, ac.attendance_id, ac.user_id, ac.correction_type, ac.reason, 
-        ac.status, ac.reviewed_by, ac.created_at,
-        e.name AS employee_name, e.email AS employee_email,
+    SELECT
+    ac.id, ac.attendance_id, ac.user_id, ac.correction_type, ac.reason,
+      ac.status, ac.reviewed_by, ac.created_at,
+      REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email,
         a.attendance_date, a.status AS original_status
       FROM attendance_corrections ac
       JOIN employees e ON ac.user_id = e.id
       JOIN attendance a ON ac.attendance_id = a.id
       ORDER BY ac.created_at DESC
-    `);
+      `);
     res.json({ corrections });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch attendance corrections' });
@@ -864,10 +853,10 @@ export async function rejectAttendanceCorrection(req, res) {
 export async function getOvertimes(req, res) {
   try {
     const [overtimes] = await db.execute(`
-      SELECT 
-        o.id, o.user_id, o.work_date, o.hours, o.description, 
-        o.status, o.created_at,
-        e.name AS employee_name, e.email AS employee_email
+    SELECT
+    o.id, o.user_id, o.work_date, o.hours, o.description,
+      o.status, o.created_at,
+      REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email
       FROM overtimes o
       JOIN employees e ON o.user_id = e.id
       ORDER BY o.created_at DESC
@@ -895,7 +884,7 @@ export async function approveOvertime(req, res) {
     if (overtime.length > 0) {
       await createNotification(
         overtime[0].user_id,
-        `Your overtime request for ${overtime[0].work_date} (${overtime[0].hours} hours) has been approved`
+        `Your overtime request for ${overtime[0].work_date}(${overtime[0].hours} hours) has been approved`
       );
     }
 
@@ -954,7 +943,7 @@ export async function getAuditLogs(req, res) {
 
     if (sortBy && allowedSortColumns[sortBy]) {
       const direction = (sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-      orderByClause = `ORDER BY ${allowedSortColumns[sortBy]} ${direction}`;
+      orderByClause = `ORDER BY ${allowedSortColumns[sortBy]} ${direction} `;
     }
 
     // Search
@@ -965,13 +954,13 @@ export async function getAuditLogs(req, res) {
 
     if (search) {
       whereClause = `
-        WHERE (
-          e.name LIKE ? 
-          OR e.email LIKE ? 
-          OR al.action LIKE ?
+    WHERE(
+      e.name LIKE ?
+      OR e.email LIKE ?
+      OR al.action LIKE ?
         )
       `;
-      const searchTerm = `%${search}%`;
+      const searchTerm = `% ${search}% `;
       queryParams.push(searchTerm, searchTerm, searchTerm);
       countParams.push(searchTerm, searchTerm, searchTerm);
     }
@@ -979,13 +968,8 @@ export async function getAuditLogs(req, res) {
     // Build SQL with numbers directly (no ? in LIMIT/OFFSET)
     const [logs] = await db.execute(`
       SELECT 
-        al.id,
-        al.user_id,
-        al.action,
-        al.metadata,
-        al.created_at,
-        e.name  AS user_name,
-        e.email AS user_email
+        al.id, al.user_id, al.action, al.metadata, al.created_at,
+        REPLACE(e.name, ',', '') AS user_name, e.email AS user_email
       FROM audit_logs al
       LEFT JOIN employees e ON al.user_id = e.id
       ${whereClause}
@@ -997,7 +981,7 @@ export async function getAuditLogs(req, res) {
       `SELECT COUNT(*) AS total 
        FROM audit_logs al 
        LEFT JOIN employees e ON al.user_id = e.id
-       ${whereClause}`,
+       ${whereClause} `,
       countParams
     );
 
@@ -1028,20 +1012,20 @@ export async function getAttendanceReport(req, res) {
     const params = department ? [start, end, department] : [start, end];
 
     const [stats] = await db.execute(`
-      SELECT 
-        DATE_FORMAT(a.attendance_date, '%Y-%m-%d') as date,
-        SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent,
-        SUM(CASE WHEN a.status = 'half_day' THEN 1 ELSE 0 END) as half_day,
-        SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late,
-        COUNT(*) as total_records
+    SELECT
+    DATE_FORMAT(a.attendance_date, '%Y-%m-%d') as date,
+      SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present,
+      SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent,
+      SUM(CASE WHEN a.status = 'half_day' THEN 1 ELSE 0 END) as half_day,
+      SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late,
+      COUNT(*) as total_records
       FROM attendance a
       JOIN employees e ON a.user_id = e.id
       WHERE a.attendance_date BETWEEN ? AND ?
       ${departmentFilter}
       GROUP BY date
       ORDER BY date ASC
-    `, params);
+      `, params);
 
     res.json({ stats });
   } catch (error) {
@@ -1059,15 +1043,15 @@ export async function getLeaveReport(req, res) {
 
     // Grouping by start_date for the chart (Trend of leave applications)
     const [stats] = await db.execute(`
-      SELECT 
-        DATE_FORMAT(start_date, '%Y-%m-%d') as date,
-        type,
-        COUNT(*) as count
+    SELECT
+    DATE_FORMAT(start_date, '%Y-%m-%d') as date,
+      type,
+      COUNT(*) as count
       FROM leave_requests
       WHERE start_date BETWEEN ? AND ?
       GROUP BY date, type
       ORDER BY date ASC
-    `, [start, end]);
+      `, [start, end]);
 
     // Also get breakdown by status for the period
     const [summary] = await db.execute(`
@@ -1075,7 +1059,7 @@ export async function getLeaveReport(req, res) {
       FROM leave_requests
       WHERE start_date BETWEEN ? AND ?
       GROUP BY type, status
-    `, [start, end]);
+        `, [start, end]);
 
     res.json({ stats, summary });
   } catch (error) {
@@ -1090,7 +1074,7 @@ export async function getEmployeeRoleStats(req, res) {
       SELECT role, COUNT(*) as count
       FROM employees
       GROUP BY role
-    `);
+      `);
     res.json({ stats });
   } catch (error) {
     console.error('Role stats error:', error);
