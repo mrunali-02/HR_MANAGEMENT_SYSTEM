@@ -13,8 +13,8 @@ async function migrate() {
     console.log('Starting database migration...');
 
     // Create employees table
-   await connection.execute(
-  `CREATE TABLE IF NOT EXISTS employees (
+    await connection.execute(
+      `CREATE TABLE IF NOT EXISTS employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id VARCHAR(50) UNIQUE,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -34,7 +34,7 @@ async function migrate() {
     INDEX idx_manager_id (manager_id),
     FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-);
+    );
 
     console.log('✓ Created employees table');
 
@@ -50,8 +50,17 @@ async function migrate() {
         }
       });
 
-      // Optional: Drop contact_number if exists (ignoring for safety usually, but user asked to remove)
-      // For now, let's just add status to be safe and ensure the UI uses it.
+      // Drop contact_number if exists (cleanup)
+      await connection.execute(`
+        SELECT count(*) FROM information_schema.COLUMNS 
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'contact_number')
+      `).then(async ([rows]) => {
+        if (rows[0]['count(*)'] > 0) {
+          await connection.execute("ALTER TABLE employees DROP COLUMN contact_number");
+          console.log('✓ Dropped deprecated contact_number column from employees');
+        }
+      });
+
     } catch (err) {
       console.log('Note: Column migration check failed or already exists', err.message);
     }
