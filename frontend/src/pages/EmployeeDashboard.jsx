@@ -20,8 +20,8 @@ function EmployeeDashboard() {
   const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   // Attendance state
-  const [todayAttendance, setTodayAttendance] = useState(null); 
-  const [attendanceRecords, setAttendanceRecords] = useState([]); 
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
 
   // Leaves state
   const [leaveBalance, setLeaveBalance] = useState({
@@ -32,7 +32,7 @@ function EmployeeDashboard() {
     paid: 0,
     emergency: 0
   });
-  const [leaveHistory, setLeaveHistory] = useState([]); 
+  const [leaveHistory, setLeaveHistory] = useState([]);
   const [leaveForm, setLeaveForm] = useState({
     type: 'sick',
     startDate: '',
@@ -148,11 +148,11 @@ function EmployeeDashboard() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-      await axios.post(
-        `${API_BASE_URL}/logout`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+        await axios.post(
+          `${API_BASE_URL}/logout`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
       }
     } catch (err) {
       console.error('Error during logout:', err);
@@ -177,14 +177,14 @@ function EmployeeDashboard() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       // Only set success if we're on the attendance tab
       if (activeTab === 'attendance') {
-      setSuccess('Attendance marked successfully!');
+        setSuccess('Attendance marked successfully!');
         // Clear after 3 seconds
         setTimeout(() => setSuccess(''), 3000);
       }
-      
+
       // Mark as attended and refresh attendance
       setAttendanceMarked(true);
       const token2 = localStorage.getItem('token');
@@ -217,7 +217,7 @@ function EmployeeDashboard() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       // Only set success if we're on the attendance tab
       if (activeTab === 'attendance') {
         const hours = response.data.total_hours || '0';
@@ -225,7 +225,7 @@ function EmployeeDashboard() {
         setSuccess(`Checkout marked successfully! Worked ${hours} hours${parseFloat(overtime) > 0 ? ` (${overtime} hrs overtime)` : ''}`);
         setTimeout(() => setSuccess(''), 5000);
       }
-      
+
       // Mark as checked out and refresh attendance
       setCheckoutMarked(true);
       const token2 = localStorage.getItem('token');
@@ -278,7 +278,7 @@ function EmployeeDashboard() {
       );
       // Only set success if we're on the leaves tab
       if (activeTab === 'leaves') {
-      setSuccess('Leave applied successfully!');
+        setSuccess('Leave applied successfully!');
         setTimeout(() => setSuccess(''), 3000);
       }
       setLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '' });
@@ -300,7 +300,7 @@ function EmployeeDashboard() {
     } catch (err) {
       console.error('Error applying leave:', err);
       if (activeTab === 'leaves') {
-      setError(err.response?.data?.error || 'Failed to apply leave');
+        setError(err.response?.data?.error || 'Failed to apply leave');
         setTimeout(() => setError(''), 5000);
       }
     } finally {
@@ -371,47 +371,43 @@ function EmployeeDashboard() {
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
         <div className="h-16 flex items-center justify-center border-b border-slate-800">
-           <span className="text-lg font-semibold tracking-wide">Employee Panel</span>
+          <span className="text-lg font-semibold tracking-wide">Employee Panel</span>
         </div>
-        
+
         <nav className="flex-1 py-4 space-y-1">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === 'dashboard'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'dashboard'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Dashboard
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === 'attendance'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'attendance'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Attendance
           </button>
           <button
             onClick={() => setActiveTab('leaves')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === 'leaves'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'leaves'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Leaves
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === 'settings'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'settings'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Settings
           </button>
@@ -432,14 +428,14 @@ function EmployeeDashboard() {
         {/* Top Header */}
         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
           <div>
-             <h1 className="text-xl font-semibold text-gray-900">
-               {activeTab === 'dashboard' ? 'Overview' :
+            <h1 className="text-xl font-semibold text-gray-900">
+              {activeTab === 'dashboard' ? 'Overview' :
                 activeTab === 'attendance' ? 'Attendance History' :
-                activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
-             </h1>
-             <p className="text-xs text-gray-500">
-               Welcome back, {profile?.user?.name || 'Employee'}
-             </p>
+                  activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
+            </h1>
+            <p className="text-xs text-gray-500">
+              Welcome back, {profile?.user?.name || 'Employee'}
+            </p>
           </div>
           <div className="text-sm font-medium text-gray-600">
             {profile?.user?.email}
@@ -474,9 +470,9 @@ function EmployeeDashboard() {
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                
+
                 {/* 1. Attendance Card (Blue Gradient) */}
                 <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between">
                   <div>
@@ -485,38 +481,37 @@ function EmployeeDashboard() {
                       {todayAttendance?.status === 'present'
                         ? 'Present'
                         : todayAttendance?.status === 'absent'
-                        ? 'Absent'
-                        : 'Not Marked'}
+                          ? 'Absent'
+                          : 'Not Marked'}
                     </div>
                     {todayAttendance?.check_in && (
-                       <div className="mt-1 text-xs opacity-75">
-                         In: {todayAttendance.check_in}
-                       </div>
+                      <div className="mt-1 text-xs opacity-75">
+                        In: {todayAttendance.check_in}
+                      </div>
                     )}
                     {todayAttendance?.check_out && (
-                       <div className="mt-1 text-xs opacity-75">
-                         Out: {todayAttendance.check_out}
-                       </div>
+                      <div className="mt-1 text-xs opacity-75">
+                        Out: {todayAttendance.check_out}
+                      </div>
                     )}
                     {todayAttendance?.total_hours && (
-                       <div className="mt-1 text-xs opacity-75 font-semibold">
-                         Hours: {todayAttendance.total_hours}
-                         {todayAttendance.overtime_hours && parseFloat(todayAttendance.overtime_hours) > 0 && (
-                           <span className="ml-1">(+{todayAttendance.overtime_hours} OT)</span>
-                         )}
-                       </div>
+                      <div className="mt-1 text-xs opacity-75 font-semibold">
+                        Hours: {todayAttendance.total_hours}
+                        {todayAttendance.overtime_hours && parseFloat(todayAttendance.overtime_hours) > 0 && (
+                          <span className="ml-1">(+{todayAttendance.overtime_hours} OT)</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="mt-4 space-y-2">
-                  <button
-                    onClick={handleMarkAttendance}
+                    <button
+                      onClick={handleMarkAttendance}
                       disabled={attendanceMarked || todayAttendance?.status === 'present'}
-                      className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${
-                        attendanceMarked || todayAttendance?.status === 'present'
-                          ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
+                      className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${attendanceMarked || todayAttendance?.status === 'present'
+                        ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
                         : 'bg-white text-indigo-600 hover:bg-indigo-50 shadow-md'
-                    }`}
-                  >
+                        }`}
+                    >
                       {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
                     </button>
                     {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
@@ -533,7 +528,7 @@ function EmployeeDashboard() {
                         className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
                       >
                         ✓ Checked Out
-                  </button>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -545,11 +540,21 @@ function EmployeeDashboard() {
                     {leaveBalance.total - leaveBalance.used}/{leaveBalance.total}
                   </div>
                   <div className="mt-1 text-xs opacity-80">
-                     Days Remaining
+                    Days Remaining
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs opacity-80">
-                    <span>Sick: {leaveBalance.sick}</span>
-                    <span>Casual: {leaveBalance.casual}</span>
+                  <div className="mt-4 grid grid-cols-3 gap-1 text-xs opacity-90 font-medium">
+                    <div className="flex flex-col items-center">
+                      <span className="opacity-75">Planned</span>
+                      <span className="text-sm">{leaveBalance.paid}</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="opacity-75">Casual</span>
+                      <span className="text-sm">{leaveBalance.casual}</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="opacity-75">Sick</span>
+                      <span className="text-sm">{leaveBalance.sick}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -562,7 +567,7 @@ function EmployeeDashboard() {
                         {leaveHistory[0].type}
                       </div>
                       <div className="mt-1 text-xs opacity-80">
-                         {leaveHistory[0].start_date}
+                        {leaveHistory[0].start_date}
                       </div>
                       <div className="mt-3 inline-block px-2 py-1 bg-white/20 rounded text-xs font-bold uppercase">
                         {leaveHistory[0].status}
@@ -578,7 +583,7 @@ function EmployeeDashboard() {
                   <div className="text-sm uppercase tracking-wide opacity-80">Notifications</div>
                   <div className="mt-2 text-3xl font-bold">{notifications.length}</div>
                   <div className="mt-1 text-xs opacity-80">
-                     New Updates
+                    New Updates
                   </div>
                   <div className="mt-2 text-xs truncate opacity-75">
                     {notifications[0]?.message || 'No new alerts'}
@@ -611,7 +616,7 @@ function EmployeeDashboard() {
           {activeTab === 'attendance' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Attendance Records</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Attendance Records</h2>
                 <div className="flex gap-2">
                   {!(attendanceMarked || todayAttendance?.status === 'present') ? (
                     <button
@@ -672,12 +677,11 @@ function EmployeeDashboard() {
                             {new Date(rec.date).toLocaleDateString()}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                rec.status === 'present'
-                                  ? 'bg-green-100 text-green-800'
-                                  : rec.status === 'absent'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${rec.status === 'present'
+                              ? 'bg-green-100 text-green-800'
+                              : rec.status === 'absent'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
                               }`}>
                               {rec.status}
                             </span>
@@ -737,11 +741,11 @@ function EmployeeDashboard() {
                     >
                       <option value="sick">Sick Leave</option>
                       <option value="casual">Casual Leave</option>
-                      <option value="paid">Paid Leave</option>
+                      <option value="paid">Planned Leave</option>
                       <option value="emergency">Emergency Leave</option>
                     </select>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
@@ -815,12 +819,11 @@ function EmployeeDashboard() {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500 truncate max-w-xs">{l.reason}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                l.status === 'approved'
-                                  ? 'bg-green-100 text-green-800'
-                                  : l.status === 'rejected'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${l.status === 'approved'
+                              ? 'bg-green-100 text-green-800'
+                              : l.status === 'rejected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
                               }`}>
                               {l.status}
                             </span>
@@ -837,64 +840,64 @@ function EmployeeDashboard() {
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-2xl mx-auto">
-               <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
-               
-               <div className="bg-white rounded-xl shadow-sm p-6">
-                 <form onSubmit={handleSaveSettings} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Email Address</label>
-                      <input
-                        type="email"
-                        value={profile?.user?.email || ''}
-                        disabled
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
-                      <input
-                        type="text"
-                        value={settingsForm.name}
-                        onChange={(e) => handleSettingsChange('name', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Your full name"
-                      />
-                    </div>
+              <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Display Name</label>
-                      <input
-                        type="text"
-                        value={settingsForm.display_name}
-                        onChange={(e) => handleSettingsChange('display_name', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Preferred display name"
-                      />
-                    </div>
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <form onSubmit={handleSaveSettings} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={profile?.user?.email || ''}
+                      disabled
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Bio</label>
-                      <textarea
-                        rows="4"
-                        value={settingsForm.bio}
-                        onChange={(e) => handleSettingsChange('bio', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Tell us a bit about yourself..."
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={settingsForm.name}
+                      onChange={(e) => handleSettingsChange('name', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Your full name"
+                    />
+                  </div>
 
-                    <div className="flex justify-end pt-4">
-                      <button
-                        type="submit"
-                        disabled={settingsSaving}
-                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
-                      >
-                        {settingsSaving ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </div>
-                 </form>
-               </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Display Name</label>
+                    <input
+                      type="text"
+                      value={settingsForm.display_name}
+                      onChange={(e) => handleSettingsChange('display_name', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Preferred display name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Bio</label>
+                    <textarea
+                      rows="4"
+                      value={settingsForm.bio}
+                      onChange={(e) => handleSettingsChange('bio', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Tell us a bit about yourself..."
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="submit"
+                      disabled={settingsSaving}
+                      className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
+                    >
+                      {settingsSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </main>

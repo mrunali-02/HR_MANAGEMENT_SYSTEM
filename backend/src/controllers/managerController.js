@@ -26,7 +26,6 @@ export async function getManagerProfile(req, res) {
         e.joined_on,
         e.photo_url,
         e.address,
-        e.contact_number,
         p.display_name,
         p.bio
       FROM employees e

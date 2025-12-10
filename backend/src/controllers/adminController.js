@@ -5,6 +5,93 @@ import { generateToken, getExpiryDate } from '../utils/token.js';
 import { logAudit, createNotification } from '../utils/audit.js';
 
 /* ======================
+     DASHBOARD SUMMARY
+====================== */
+export async function getDashboardSummary(req, res) {
+  try {
+    const [[counts]] = await db.execute(`
+      SELECT
+        (SELECT COUNT(*) FROM employees) AS totalEmployees,
+        (SELECT COUNT(*) FROM employees WHERE status = 'active') AS activeEmployees,
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS pendingLeaveRequests,
+        (SELECT COUNT(*) FROM employees WHERE role='manager') AS totalManagers,
+        (SELECT COUNT(*) FROM employees WHERE role='hr') AS totalHr,
+        (SELECT COUNT(*) FROM employees WHERE role='admin') AS totalAdmins,
+        (SELECT COUNT(*) FROM employees WHERE status = 'inactive') AS inactiveEmployees
+    `);
+
+    const [[{ presentCount = 0 }]] = await db.execute(`
+      SELECT COUNT(*) AS presentCount
+      FROM attendance
+      WHERE attendance_date = CURDATE()
+        AND status IN ('present', 'remote')
+    `);
+
+    const [[{ leaveToday = 0 }]] = await db.execute(`
+      SELECT COUNT(*) AS leaveToday
+      FROM leave_requests
+      WHERE status = 'approved'
+        AND CURDATE() BETWEEN start_date AND end_date
+    `);
+
+    const [[{ managerApprovedToday = 0 }]] = await db.execute(`
+      SELECT COUNT(*) AS managerApprovedToday
+      FROM leave_requests lr
+      JOIN employees e ON lr.reviewed_by = e.id
+      WHERE lr.status = 'approved'
+        AND DATE(lr.created_at) = CURDATE()
+        AND e.role = 'manager'
+    `);
+
+    const [[{ newLeaveRequestsToday = 0 }]] = await db.execute(`
+      SELECT COUNT(*) AS newLeaveRequestsToday
+      FROM leave_requests
+      WHERE DATE(created_at) = CURDATE()
+        AND status = 'pending'
+    `);
+
+    const absentToday = Math.max(
+      0,
+      (counts?.totalEmployees || 0) - (presentCount || 0) - (leaveToday || 0)
+    );
+
+    const notifications = [];
+    if (managerApprovedToday > 0) {
+      notifications.push(
+        `Managers approved ${managerApprovedToday} leave${managerApprovedToday > 1 ? 's' : ''} today`
+      );
+    }
+    if (newLeaveRequestsToday > 0) {
+      notifications.push(
+        `${newLeaveRequestsToday} new leave request${newLeaveRequestsToday > 1 ? 's' : ''} received today`
+      );
+    }
+    if (notifications.length === 0) {
+      notifications.push('No new notifications for today');
+    }
+
+    res.json({
+      totals: {
+        totalEmployees: counts?.totalEmployees || 0,
+        activeEmployees: counts?.activeEmployees || 0,
+        pendingLeaveRequests: counts?.pendingLeaveRequests || 0,
+        presentToday: presentCount || 0,
+        absentToday,
+        totalManagers: counts?.totalManagers || 0,
+        totalHr: counts?.totalHr || 0,
+        totalAdmins: counts?.totalAdmins || 0,
+        inactiveEmployees: counts?.inactiveEmployees || 0,
+        leavesToday: leaveToday || 0,
+      },
+      notifications,
+    });
+  } catch (error) {
+    console.error('Dashboard summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard summary' });
+  }
+}
+
+/* ======================
       ADMIN LOGIN
 ====================== */
 export async function adminLogin(req, res) {
@@ -60,7 +147,7 @@ export async function adminLogin(req, res) {
 ====================== */
 export async function addEmployee(req, res) {
   try {
-    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, contact_number, status } = req.body;
+    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -68,6 +155,10 @@ export async function addEmployee(req, res) {
 
     if (!['employee', 'manager', 'hr'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    if (status && !['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
     }
 
     const [existing] = await db.execute('SELECT id FROM employees WHERE email = ?', [email]);
@@ -82,9 +173,9 @@ export async function addEmployee(req, res) {
 
     const [result] = await db.execute(
       `INSERT INTO employees (
-        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, contact_number, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, status || 'active']
+        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, status || 'active']
     );
 
     await db.execute('INSERT INTO profiles (user_id, display_name) VALUES (?, ?)', [result.insertId, name || email]);
@@ -121,7 +212,7 @@ export async function getUsers(req, res) {
         e.phone, 
         e.joined_on, 
         e.address, 
-        e.contact_number, 
+        e.status,
         e.manager_id,
         e.created_at,
         m.name AS manager_name,
@@ -210,23 +301,38 @@ export async function assignManager(req, res) {
 export async function updateEmployee(req, res) {
   try {
     const { id } = req.params;
+<<<<<<< HEAD
     const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, contact_number, status } = req.body;
+=======
+    const { name, role, department, phone, joined_on, address, status } = req.body;
+>>>>>>> ae56512 (my local updates)
 
     if (parseInt(id) === req.user.id && role && role !== req.user.role) {
       return res.status(400).json({ error: 'You cannot change your own role' });
     }
 
+<<<<<<< HEAD
     // Construct full name for backward compatibility
     let fullName = name;
     if (!name && (first_name || last_name)) {
       fullName = `${last_name || ''}, ${first_name || ''} ${middle_name || ''}`.trim().replace(/\s+/g, ' ');
+=======
+    if (status && !['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+>>>>>>> ae56512 (my local updates)
     }
 
     await db.execute(
       `UPDATE employees SET
+<<<<<<< HEAD
         name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, contact_number=?, status=? 
        WHERE id=?`,
       [fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, contact_number || null, status || 'active', id]
+=======
+        name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=?
+       WHERE id=?`,
+      [name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active', id]
+>>>>>>> ae56512 (my local updates)
     );
 
     res.json({ message: 'Employee updated successfully' });
@@ -272,6 +378,46 @@ export async function getLeaveRequests(req, res) {
     res.json({ requests });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch leave requests' });
+  }
+}
+
+export async function getLeaveStatistics(req, res) {
+  try {
+    const currentYear = new Date().getFullYear();
+
+    const [stats] = await db.execute(`
+      SELECT 
+        type,
+        COUNT(*) as count
+      FROM leave_requests
+      WHERE YEAR(start_date) = ? OR YEAR(end_date) = ?
+      GROUP BY type
+    `, [currentYear, currentYear]);
+
+    // Initialize counts
+    const leaveCounts = {
+      paid: 0,
+      casual: 0,
+      sick: 0,
+      emergency: 0
+    };
+
+    stats.forEach(stat => {
+      if (leaveCounts.hasOwnProperty(stat.type)) {
+        leaveCounts[stat.type] = stat.count;
+      }
+    });
+
+    res.json({
+      year: currentYear,
+      plannedLeave: leaveCounts.paid,
+      casualLeave: leaveCounts.casual,
+      sickLeave: leaveCounts.sick,
+      emergencyLeave: leaveCounts.emergency
+    });
+  } catch (error) {
+    console.error('Leave statistics error:', error);
+    res.status(500).json({ error: 'Failed to fetch leave statistics' });
   }
 }
 
@@ -373,6 +519,61 @@ export async function changeAdminPassword(req, res) {
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to change password' });
+  }
+}
+
+/* ======================
+        ADMIN NOTES
+====================== */
+export async function getAdminNotes(req, res) {
+  try {
+    const [rows] = await db.execute(
+      `SELECT id, user_id, content, created_at 
+       FROM admin_notes 
+       ORDER BY created_at DESC`
+    );
+    res.json({ notes: rows });
+  } catch (error) {
+    console.error('Get admin notes error:', error);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+}
+
+export async function createAdminNote(req, res) {
+  try {
+    const content = (req.body.content || '').trim();
+    if (!content) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO admin_notes (user_id, content) VALUES (?, ?)',
+      [req.user.id, content]
+    );
+
+    await logAudit(req.user.id, 'admin_note_created', { note_id: result.insertId });
+
+    res.status(201).json({
+      id: result.insertId,
+      user_id: req.user.id,
+      content,
+      created_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Create admin note error:', error);
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+}
+
+export async function deleteAdminNote(req, res) {
+  try {
+    const { id } = req.params;
+    await db.execute('DELETE FROM admin_notes WHERE id = ?', [id]);
+    await logAudit(req.user.id, 'admin_note_deleted', { note_id: parseInt(id, 10) });
+    res.json({ message: 'Note deleted' });
+  } catch (error) {
+    console.error('Delete admin note error:', error);
+    res.status(500).json({ error: 'Failed to delete note' });
   }
 }
 
@@ -738,6 +939,43 @@ export async function getAuditLogs(req, res) {
     if (limitNum > 500) limitNum = 500;
     if (offsetNum < 0) offsetNum = 0;
 
+    // Sorting
+    const { sortBy, sortOrder } = req.query;
+    let orderByClause = 'ORDER BY al.created_at DESC';
+
+    // Whitelist allowed columns for sorting
+    const allowedSortColumns = {
+      'time': 'al.created_at',
+      'user': 'user_email', // or user_name
+      'activity': 'al.action',
+      'action': 'al.action',
+      'created_at': 'al.created_at'
+    };
+
+    if (sortBy && allowedSortColumns[sortBy]) {
+      const direction = (sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      orderByClause = `ORDER BY ${allowedSortColumns[sortBy]} ${direction}`;
+    }
+
+    // Search
+    const { search } = req.query;
+    let whereClause = '';
+    const queryParams = [];
+    const countParams = [];
+
+    if (search) {
+      whereClause = `
+        WHERE (
+          e.name LIKE ? 
+          OR e.email LIKE ? 
+          OR al.action LIKE ?
+        )
+      `;
+      const searchTerm = `%${search}%`;
+      queryParams.push(searchTerm, searchTerm, searchTerm);
+      countParams.push(searchTerm, searchTerm, searchTerm);
+    }
+
     // Build SQL with numbers directly (no ? in LIMIT/OFFSET)
     const [logs] = await db.execute(`
       SELECT 
@@ -750,12 +988,17 @@ export async function getAuditLogs(req, res) {
         e.email AS user_email
       FROM audit_logs al
       LEFT JOIN employees e ON al.user_id = e.id
-      ORDER BY al.created_at DESC
+      ${whereClause}
+      ${orderByClause}
       LIMIT ${limitNum} OFFSET ${offsetNum}
-    `);
+    `, queryParams);
 
     const [[count]] = await db.execute(
-      'SELECT COUNT(*) AS total FROM audit_logs'
+      `SELECT COUNT(*) AS total 
+       FROM audit_logs al 
+       LEFT JOIN employees e ON al.user_id = e.id
+       ${whereClause}`,
+      countParams
     );
 
     res.json({
@@ -767,5 +1010,90 @@ export async function getAuditLogs(req, res) {
   } catch (error) {
     console.error('Error fetching audit logs:', error);
     res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+}
+
+/* ======================
+     REPORTS (CHARTS)
+====================== */
+export async function getAttendanceReport(req, res) {
+  try {
+    const { startDate, endDate, department } = req.query;
+
+    // Default to last 30 days if not provided
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const departmentFilter = department ? 'AND e.department = ?' : '';
+    const params = department ? [start, end, department] : [start, end];
+
+    const [stats] = await db.execute(`
+      SELECT 
+        DATE_FORMAT(a.attendance_date, '%Y-%m-%d') as date,
+        SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present,
+        SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent,
+        SUM(CASE WHEN a.status = 'half_day' THEN 1 ELSE 0 END) as half_day,
+        SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late,
+        COUNT(*) as total_records
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      WHERE a.attendance_date BETWEEN ? AND ?
+      ${departmentFilter}
+      GROUP BY date
+      ORDER BY date ASC
+    `, params);
+
+    res.json({ stats });
+  } catch (error) {
+    console.error('Attendance report error:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance report' });
+  }
+}
+
+export async function getLeaveReport(req, res) {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Grouping by start_date for the chart (Trend of leave applications)
+    const [stats] = await db.execute(`
+      SELECT 
+        DATE_FORMAT(start_date, '%Y-%m-%d') as date,
+        type,
+        COUNT(*) as count
+      FROM leave_requests
+      WHERE start_date BETWEEN ? AND ?
+      GROUP BY date, type
+      ORDER BY date ASC
+    `, [start, end]);
+
+    // Also get breakdown by status for the period
+    const [summary] = await db.execute(`
+      SELECT type, status, COUNT(*) as count
+      FROM leave_requests
+      WHERE start_date BETWEEN ? AND ?
+      GROUP BY type, status
+    `, [start, end]);
+
+    res.json({ stats, summary });
+  } catch (error) {
+    console.error('Leave report error:', error);
+    res.status(500).json({ error: 'Failed to fetch leave report' });
+  }
+}
+
+export async function getEmployeeRoleStats(req, res) {
+  try {
+    const [stats] = await db.execute(`
+      SELECT role, COUNT(*) as count
+      FROM employees
+      GROUP BY role
+    `);
+    res.json({ stats });
+  } catch (error) {
+    console.error('Role stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch role stats' });
   }
 }

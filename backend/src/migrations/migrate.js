@@ -136,7 +136,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_policies (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        type ENUM('sick', 'casual', 'paid', 'emergency') NOT NULL,
+        type ENUM('sick', 'casual', 'paid') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         carry_forward TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -152,14 +152,18 @@ async function migrate() {
       await connection.execute(`
     INSERT INTO leave_policies (name, type, total_days, carry_forward)
     VALUES
-      ('Sick Leave',     'sick',     5, 0),
-      ('Casual Leave',   'casual',   3, 0),
-      ('Paid Leave',     'paid',    2, 0),
-      ('Emergency Leave','emergency',3, 0)
-  `);
+      ('Sick Leave',     'sick',     6, 0),
+      ('Casual Leave',   'casual',   6, 0),
+      ('Planned Leave',  'paid',    12, 0)
+   `);
       console.log('✓ Seeded default leave policies');
     } else {
-      console.log('⚠ leave_policies already has data, skipping seed');
+      console.log('⚠ leave_policies already has data, updating values to match requirements...');
+      // Update existing policies to match new defaults
+      await connection.execute("UPDATE leave_policies SET total_days = 6 WHERE type = 'sick'");
+      await connection.execute("UPDATE leave_policies SET total_days = 6 WHERE type = 'casual'");
+      await connection.execute("UPDATE leave_policies SET total_days = 12, name = 'Planned Leave' WHERE type = 'paid'");
+      console.log('✓ Updated existing leave policies');
     }
 
 
@@ -202,7 +206,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        type ENUM('sick', 'casual', 'paid', 'emergency') NOT NULL,
+        type ENUM('sick', 'casual', 'paid') NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         reason TEXT,
@@ -221,7 +225,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_balances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        leave_type ENUM('sick', 'casual', 'paid', 'emergency') NOT NULL,
+        leave_type ENUM('sick', 'casual', 'paid') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         used_days INT NOT NULL DEFAULT 0,
         remaining_days INT NOT NULL DEFAULT 0,

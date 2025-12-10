@@ -232,8 +232,6 @@ NODE_ENV=development
 BCRYPT_SALT_ROUNDS=10
 TOKEN_EXPIRY_HOURS=24
 
-# Admin User Creation (Optional)
-# Set these to create admin during migration
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_secure_admin_password
 ```

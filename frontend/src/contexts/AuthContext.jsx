@@ -24,6 +24,20 @@ export function AuthProvider({ children }) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     }
     setLoading(false);
+
+    const handlePopStateLogout = () => {
+      // Immediately clear local storage and auth header on back navigation
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete axios.defaults.headers.common['Authorization'];
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener('popstate', handlePopStateLogout);
+    return () => {
+      window.removeEventListener('popstate', handlePopStateLogout);
+    };
   }, []);
 
   const login = async (email, password) => {

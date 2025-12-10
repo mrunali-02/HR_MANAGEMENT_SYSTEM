@@ -3,48 +3,61 @@ import { authToken } from '../middlewares/authToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import { loginRateLimiter } from '../middlewares/rateLimiter.js';
 import {
-    adminLogin,
-    addEmployee,
-    getUsers,
-    updateEmployee,
-    deleteUser,
-    getLeaveRequests,
-    approveLeaveRequest,
-    rejectLeaveRequest,
-    getHrAnalytics,
-    updateAdminProfile,
-    changeAdminPassword,
-    // Departments
-    getDepartments,
-    createDepartment,
-    updateDepartment,
-    deleteDepartment,
-    // Holidays
-    getHolidays,
-    createHoliday,
-    updateHoliday,
-    deleteHoliday,
-    // Leave Policies
-    getLeavePolicies,
-    createLeavePolicy,
-    updateLeavePolicy,
-    deleteLeavePolicy,
-    // Attendance Corrections
-    getAttendanceCorrections,
-    approveAttendanceCorrection,
-    rejectAttendanceCorrection,
-    // Overtimes
-    getOvertimes,
-    approveOvertime,
-    rejectOvertime,
-    // Audit Logs
-    getAuditLogs,
-  } from '../controllers/adminController.js';
+  adminLogin,
+  getDashboardSummary,
+  addEmployee,
+  getUsers,
+  updateEmployee,
+  deleteUser,
+  getLeaveRequests,
+  getLeaveStatistics,
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  getHrAnalytics,
+  updateAdminProfile,
+  changeAdminPassword,
+  // Departments
+  getDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+  // Holidays
+  getHolidays,
+  createHoliday,
+  updateHoliday,
+  deleteHoliday,
+  // Leave Policies
+  getLeavePolicies,
+  createLeavePolicy,
+  updateLeavePolicy,
+  deleteLeavePolicy,
+  // Attendance Corrections
+  getAttendanceCorrections,
+  approveAttendanceCorrection,
+  rejectAttendanceCorrection,
+  // Overtimes
+  getOvertimes,
+  approveOvertime,
+  rejectOvertime,
+  // Audit Logs
+  getAuditLogs,
+  // Notes
+  getAdminNotes,
+  createAdminNote,
+  deleteAdminNote,
+  // Reports
+  getAttendanceReport,
+  getLeaveReport,
+  getEmployeeRoleStats,
+} from '../controllers/adminController.js';
 
 const router = express.Router();
 
 // Auth
 router.post('/login', loginRateLimiter, adminLogin);
+
+// Dashboard summary
+router.get('/dashboard/summary', authToken, requireRole('admin'), getDashboardSummary);
 
 // Employee Management
 router.post('/employees', authToken, requireRole('admin'), addEmployee);
@@ -54,6 +67,7 @@ router.delete('/users/:id', authToken, requireRole('admin'), deleteUser);
 
 // Leave Management
 router.get('/leave-requests', authToken, requireRole('admin'), getLeaveRequests);
+router.get('/leave-statistics', authToken, requireRole('admin'), getLeaveStatistics);
 router.put('/leave-requests/:id/approve', authToken, requireRole('admin'), approveLeaveRequest);
 router.put('/leave-requests/:id/reject', authToken, requireRole('admin'), rejectLeaveRequest);
 
@@ -88,6 +102,14 @@ router.put('/overtimes/:id/reject', authToken, requireRole('admin'), rejectOvert
 // Analytics & Audit
 router.get('/analytics', authToken, requireRole('admin'), getHrAnalytics);
 router.get('/audit-logs', authToken, requireRole('admin'), getAuditLogs);
+router.get('/reports/attendance', authToken, requireRole('admin'), getAttendanceReport);
+router.get('/reports/leaves', authToken, requireRole('admin'), getLeaveReport);
+router.get('/reports/employee-roles', authToken, requireRole('admin'), getEmployeeRoleStats);
+
+// Admin notes
+router.get('/notes', authToken, requireRole('admin'), getAdminNotes);
+router.post('/notes', authToken, requireRole('admin'), createAdminNote);
+router.delete('/notes/:id', authToken, requireRole('admin'), deleteAdminNote);
 
 // Profile
 router.put('/profile/update', authToken, updateAdminProfile);
