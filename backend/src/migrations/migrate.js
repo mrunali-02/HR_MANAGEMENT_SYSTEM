@@ -13,32 +13,29 @@ async function migrate() {
     console.log('Starting database migration...');
 
     // Create employees table
-    await connection.execute(
-      `CREATE TABLE IF NOT EXISTS employees (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        employee_id VARCHAR(50) UNIQUE,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        name VARCHAR(255),
-        role ENUM('admin', 'employee', 'manager', 'hr') NOT NULL DEFAULT 'employee',
-        manager_id INT,
-        department VARCHAR(255),
-        phone VARCHAR(50),
-        joined_on DATE,
-        photo_url VARCHAR(500),
-        address TEXT,
-        joined_on DATE,
-        photo_url VARCHAR(500),
-        address TEXT,
-        status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_email (email),
+   await connection.execute(
+  `CREATE TABLE IF NOT EXISTS employees (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id VARCHAR(50) UNIQUE,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    role ENUM('admin', 'employee', 'manager', 'hr') NOT NULL DEFAULT 'employee',
+    manager_id INT,
+    department VARCHAR(255),
+    phone VARCHAR(50),
+    joined_on DATE,
+    photo_url VARCHAR(500),
+    address TEXT,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_role (role),
+    INDEX idx_manager_id (manager_id),
+    FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+);
 
-        INDEX idx_role (role),
-        INDEX idx_manager_id (manager_id),
-        FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
     console.log('✓ Created employees table');
 
     // Migration update: Add status column if not exists
