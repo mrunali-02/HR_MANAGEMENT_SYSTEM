@@ -1115,9 +1115,15 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">Phone</label>
                   <input
                     type="text"
+                    pattern="[0-9]{10}"
+                    maxLength={10}
+                    title="Enter 10 digit phone number"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, phone: value });
+                    }}
                   />
                 </div>
                 <div>
