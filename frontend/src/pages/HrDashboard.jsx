@@ -16,6 +16,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import './HrDashboard.css';
+import CalendarView from '../components/CalendarView';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -24,6 +25,7 @@ const TABS = {
   DASHBOARD: 'dashboard',
   EMPLOYEES: 'employees',
   LEAVE_APPLICATIONS: 'leaveApplications',
+  CALENDAR: 'calendar',
   ANALYTICS: 'analytics',
   SETTINGS: 'settings',
 };
@@ -41,6 +43,13 @@ function HrDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [assigningManager, setAssigningManager] = useState({});
 
+  // Attendance & Calendar
+  const [holidays, setHolidays] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [checkoutMarked, setCheckoutMarked] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -50,17 +59,46 @@ function HrDashboard() {
       navigate('/login');
       return;
     }
-    Promise.all([fetchUsers(), fetchManagers(), fetchLeaveApplications()]).finally(() => {
+    Promise.all([
+      fetchUsers(),
+      fetchManagers(),
+      fetchLeaveApplications(),
+      fetchHolidays(),
+      fetchMyAttendance()
+    ]).finally(() => {
       setLoading(false);
     });
   }, [user, navigate]);
 
-  useEffect(() => {
-    if (activeTab === TABS.ANALYTICS) {
-      fetchAnalytics();
-    }
-  }, [activeTab]);
+  // ... (existing code) ...
 
+  const fetchHolidays = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/holidays`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHolidays(response.data.holidays || []);
+    } catch (err) {
+      console.error('Error fetching holidays:', err);
+    }
+  };
+
+  const fetchMyAttendance = async () => {
+    if (!user?.id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/attendance`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAttendanceRecords(res.data.records || []);
+      setTodayAttendance(res.data.today || null);
+      setAttendanceMarked(res.data.today?.status === 'present');
+      setCheckoutMarked(!!res.data.today?.check_out);
+    } catch (err) {
+      console.error('Error fetching my attendance:', err);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -117,7 +155,7 @@ function HrDashboard() {
       console.error("Analytics fetch failed", err);
     }
   };
-  
+
 
 
   const handleApproveLeave = async (leaveId) => {
@@ -198,6 +236,72 @@ function HrDashboard() {
       setTimeout(() => setError(''), 5000);
     } finally {
       setAssigningManager(prev => ({ ...prev, [employeeId]: false }));
+    }
+  };
+
+  const handleMarkAttendance = async () => {
+    if (attendanceMarked || todayAttendance?.status === 'present') return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Checked in successfully!');
+      fetchMyAttendance();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      alert('Check-in failed');
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const hours = res.data.total_hours || '0';
+      setSuccess(`Checked out! Worked ${hours} hours.`);
+      fetchMyAttendance();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      alert('Checkout failed');
+    }
+  };
+
+  const handleToggleHoliday = async (dateStr, isHoliday) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (isHoliday) {
+        // Find holiday with local date comparison
+        const holiday = holidays.find(h => {
+          let hDate = h.date;
+          if (typeof h.date === 'string') {
+            const d = new Date(h.date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            hDate = `${year}-${month}-${day}`;
+          }
+          return hDate === dateStr;
+        });
+
+        if (holiday && window.confirm(`Delete holiday "${holiday.name}"?`)) {
+          await axios.delete(`${API_BASE_URL}/holidays/${holiday.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } else {
+        const name = prompt('Enter holiday name:');
+        if (!name) return;
+        await axios.post(`${API_BASE_URL}/holidays`, { date: dateStr, name }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      fetchHolidays();
+    } catch (err) {
+      alert('Failed to update holiday: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -310,37 +414,83 @@ function HrDashboard() {
     </div>
   );
 
-  const renderLeaveApplications = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Leave Applications</h2>
+  const renderLeaveApplications = () => {
+    const calculateDays = (start, end) => {
+      if (!start || !end) return 0;
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (endDate < startDate) return 0;
+      const diffTime = Math.abs(endDate - startDate);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    };
 
-      {leaveApplications.map((la) => (
-        <div key={la.id} className="border bg-white shadow p-4 rounded flex justify-between">
-          <div>
-            <div>
-              <strong>{la.employee_name}</strong> ({la.type})
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Leave Applications</h2>
+
+        {leaveApplications.length === 0 && <p className="text-gray-500">No leave applications found.</p>}
+
+        {leaveApplications.map((la) => (
+          <div key={la.id} className="border bg-white shadow p-4 rounded flex flex-col md:flex-row justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-bold text-lg">{la.employee_name}</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full border ${la.type === 'sick' ? 'bg-orange-50 border-orange-200 text-orange-700' :
+                  la.type === 'casual' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                    'bg-gray-50 border-gray-200 text-gray-700'
+                  }`}>
+                  {la.type}
+                </span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${la.status === 'approved' ? 'bg-green-100 text-green-800' :
+                  la.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    la.status === 'cancelled' ? 'bg-gray-100 text-gray-500' :
+                      'bg-yellow-100 text-yellow-800'
+                  }`}>
+                  {la.status}
+                </span>
+              </div>
+
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>
+                  <span className="font-medium">Period:</span> {la.start_date} to {la.end_date}
+                  <span className="font-bold ml-2">({la.days || calculateDays(la.start_date, la.end_date)} Days)</span>
+                </p>
+                <p><span className="font-medium">Reason:</span> {la.reason || 'No reason provided'}</p>
+                {la.document_url && (
+                  <p>
+                    <span className="font-medium">Document:</span>
+                    <a
+                      href={`${API_BASE_URL.replace('/api', '')}/${la.document_url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      View Attachment
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
-            <div>{la.start_date} - {la.end_date}</div>
-            <div className="text-gray-600 text-sm">{la.reason}</div>
+
+            <div className="flex items-start gap-2 min-w-[150px] justify-end">
+              {la.status === 'pending' ? (
+                <>
+                  <button onClick={() => handleApproveLeave(la.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">
+                    Approve
+                  </button>
+                  <button onClick={() => handleRejectLeave(la.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">
+                    Reject
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-gray-400 italic mt-1">Processed</span>
+              )}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {la.status === 'pending' ? (
-              <>
-                <button onClick={() => handleApproveLeave(la.id)} className="bg-green-600 text-white px-3 py-1 rounded">
-                  Approve
-                </button>
-                <button onClick={() => handleRejectLeave(la.id)} className="bg-red-600 text-white px-3 py-1 rounded">
-                  Reject
-                </button>
-              </>
-            ) : (
-              <span className="text-gray-500">{la.status.toUpperCase()}</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+      </div>
+    );
+  };
 
   const CARD_COLORS = {
     indigo: 'bg-indigo-600',
@@ -351,7 +501,7 @@ function HrDashboard() {
     green: 'bg-green-600',
     red: 'bg-red-600',
   };
-  
+
   const Card = ({ label, value, color }) => (
     <div className={`${CARD_COLORS[color]} text-white p-6 rounded-xl shadow`}>
       <p className="text-sm opacity-80">{label}</p>
@@ -362,23 +512,23 @@ function HrDashboard() {
     if (!analytics) {
       return <div className="text-gray-600">Loading analytics...</div>;
     }
-  
+
     const deptData = analytics.departmentDistribution || [];
     const leaveDeptData = analytics.departmentLeaveDistribution || [];
-  
+
     const leaveStatusData = [
       { name: 'Approved', value: analytics.summary?.approvedLeaves || 0 },
       { name: 'Pending', value: analytics.summary?.pendingLeaves || 0 },
       { name: 'Rejected', value: analytics.summary?.rejectedLeaves || 0 },
     ];
-  
+
     const PIE_COLORS = ['#22c55e', '#eab308', '#ef4444']; // green, yellow, red
     const BAR_COLORS = ['#3b82f6', '#22c55e', '#a855f7', '#f97316'];
-  
+
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">HR Analytics Overview</h2>
-  
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card label="Total Employees" value={analytics.summary?.totalEmployees} color="indigo" />
@@ -389,7 +539,7 @@ function HrDashboard() {
           <Card label="Approved Leaves" value={analytics.summary?.approvedLeaves} color="green" />
           <Card label="Rejected Leaves" value={analytics.summary?.rejectedLeaves} color="red" />
         </div>
-  
+
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pie Chart - Leave Status */}
@@ -418,7 +568,7 @@ function HrDashboard() {
               </ResponsiveContainer>
             </div>
           </div>
-  
+
           {/* Bar Chart - Employees by Department */}
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
             <h3 className="text-lg font-semibold mb-2 text-gray-900">Employees by Department</h3>
@@ -445,7 +595,7 @@ function HrDashboard() {
             </div>
           </div>
         </div>
-  
+
         {/* Bar Chart - Leaves by Department */}
         <div className="bg-white p-6 rounded-xl shadow flex flex-col">
           <h3 className="text-lg font-semibold mb-2 text-gray-900">Leaves by Department</h3>
@@ -474,7 +624,51 @@ function HrDashboard() {
       </div>
     );
   };
-  
+
+  const renderCalendar = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+        <h2 className="text-2xl font-bold text-gray-800">My Attendance & Holidays</h2>
+        <div className="flex gap-2">
+          {!attendanceMarked ? (
+            <button
+              onClick={handleMarkAttendance}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold"
+            >
+              Check In
+            </button>
+          ) : (
+            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
+          )}
+
+          {attendanceMarked && !checkoutMarked && (
+            <button
+              onClick={handleCheckout}
+              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold"
+            >
+              Check Out
+            </button>
+          )}
+          {checkoutMarked && (
+            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <p className="mb-4 text-sm text-gray-600">
+          Click on a date to manage holidays (HR Privilege).
+        </p>
+        <CalendarView
+          attendance={attendanceRecords}
+          holidays={holidays}
+          role="hr"
+          onDateClick={handleToggleHoliday}
+        />
+      </div>
+    </div>
+  );
+
   const renderSettings = () => (
     <div>
       <h2 className="text-2xl font-bold">Profile</h2>
@@ -499,9 +693,8 @@ function HrDashboard() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`w-full text-left px-4 py-2 rounded ${
-                activeTab === tab ? 'bg-slate-800' : 'hover:bg-slate-700'
-              }`}
+              className={`w-full text-left px-4 py-2 rounded ${activeTab === tab ? 'bg-slate-800' : 'hover:bg-slate-700'
+                }`}
             >
               {tab.replace(/([A-Z])/g, ' $1').trim()}
             </button>
@@ -522,7 +715,8 @@ function HrDashboard() {
         {activeTab === TABS.DASHBOARD && renderDashboard()}
         {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
         {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
-        {activeTab === TABS.ANALYTICS && renderAnalytics()}  
+        {activeTab === TABS.CALENDAR && renderCalendar()}
+        {activeTab === TABS.ANALYTICS && renderAnalytics()}
         {activeTab === TABS.SETTINGS && renderSettings()}
       </main>
     </div>

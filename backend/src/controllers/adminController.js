@@ -147,7 +147,7 @@ export async function adminLogin(req, res) {
 ====================== */
 export async function addEmployee(req, res) {
   try {
-    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status } = req.body;
+    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -173,9 +173,12 @@ export async function addEmployee(req, res) {
 
     const [result] = await db.execute(
       `INSERT INTO employees (
-        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, status || 'active']
+        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, status || 'active',
+        dob || null, gender || null, blood_group || null, nationality || null, emergency_contact || null
+      ]
     );
 
     await db.execute('INSERT INTO profiles (user_id, display_name) VALUES (?, ?)', [result.insertId, name || email]);
@@ -212,7 +215,11 @@ export async function getUsers(req, res) {
         e.phone, 
         e.joined_on, 
         e.address, 
-        e.status,
+        e.dob,
+        e.gender,
+        e.blood_group,
+        e.nationality,
+        e.emergency_contact,
         e.manager_id,
         e.created_at,
         REPLACE(m.name, ',', '') AS manager_name,
@@ -301,7 +308,8 @@ export async function assignManager(req, res) {
 export async function updateEmployee(req, res) {
   try {
     const { id } = req.params;
-    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, status } = req.body;
+    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
+    console.log('Update Employee Request:', { id, body: req.body });
 
     if (parseInt(id) === req.user.id && role && role !== req.user.role) {
       return res.status(400).json({ error: 'You cannot change your own role' });
@@ -317,12 +325,17 @@ export async function updateEmployee(req, res) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    await db.execute(
+    const [updateResult] = await db.execute(
       `UPDATE employees SET
-        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=? 
+        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=?, dob=?, gender=?, blood_group=?, nationality=?, emergency_contact=?
        WHERE id=?`,
-      [fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active', id]
+      [
+        fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active',
+        dob || null, gender || null, blood_group || null, nationality || null, emergency_contact || null,
+        id
+      ]
     );
+    console.log('Update Result:', updateResult);
 
     res.json({ message: 'Employee updated successfully' });
   } catch (error) {
@@ -358,7 +371,7 @@ export async function getLeaveRequests(req, res) {
   try {
     const [requests] = await db.execute(`
       SELECT lr.id, lr.user_id, REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email,
-      lr.type, lr.start_date, lr.end_date, lr.reason, lr.status, lr.created_at
+      lr.type, lr.start_date, lr.end_date, lr.days, lr.document_url, lr.reason, lr.status, lr.created_at
       FROM leave_requests lr
       JOIN employees e ON lr.user_id = e.id
       ORDER BY lr.created_at DESC

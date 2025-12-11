@@ -31,7 +31,10 @@ export async function getUserProfile(req, res) {
     }
 
     const [users] = await db.execute(
-      'SELECT id, email, role, name, department, phone, joined_on, created_at FROM employees WHERE id = ? AND role = ?',
+      `SELECT 
+        id, email, role, name, department, phone, joined_on, created_at,
+        dob, gender, blood_group, address, emergency_contact 
+       FROM employees WHERE id = ? AND role = ?`,
       [userId, role]
     );
 
@@ -56,7 +59,12 @@ export async function getUserProfile(req, res) {
         department: user.department,
         phone: user.phone,
         joined_on: user.joined_on,
-        created_at: user.created_at
+        created_at: user.created_at,
+        dob: user.dob,
+        gender: user.gender,
+        blood_group: user.blood_group,
+        address: user.address,
+        emergency_contact: user.emergency_contact
       },
       profile
     });
@@ -122,23 +130,6 @@ export async function getAttendance(req, res) {
   ) AS total_hours_calc,
 
   COALESCE(
-    CASE 
-      WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NOT NULL THEN
-        TIME_FORMAT(
-          SEC_TO_TIME(
-            GREATEST(
-              TIMESTAMPDIFF(
-                SECOND,
-                CONCAT(a.attendance_date, ' ', a.check_in_time),
-                CONCAT(a.attendance_date, ' ', a.check_out_time)
-              ) - (8 * 3600),
-              0
-            )
-          ),
-          '%H:%i'
-        )
-      ELSE TIME_FORMAT(SEC_TO_TIME(wh.overtime_hours * 3600), '%H:%i')
-    END,
     '00:00'
   ) AS overtime_hours_calc
 `;
@@ -283,7 +274,6 @@ export async function getLeaveBalance(req, res) {
       sick: 0,
       casual: 0,
       paid: 0,
-      emergency: 0
     };
 
     const [policies] = await db.execute(
@@ -324,7 +314,7 @@ export async function getLeaveHistory(req, res) {
     }
 
     const [rows] = await db.execute(
-      `SELECT id, type, start_date, end_date, reason, status, created_at
+      `SELECT id, type, start_date, end_date, days, reason, status, document_url, created_at
        FROM leave_requests
        WHERE user_id = ?
        ORDER BY created_at DESC`,
@@ -346,26 +336,119 @@ export async function createLeaveRequest(req, res) {
     }
 
     const { type, start_date, end_date, reason } = req.body;
+    const documentUrl = req.file ? req.file.path : null;
+
     if (!type || !start_date || !end_date || !reason) {
       return res.status(400).json({ error: 'Missing leave details' });
     }
 
     const start = new Date(start_date);
     const end = new Date(end_date);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-      return res.status(400).json({ error: 'Invalid start or end date' });
+    // Set time to noon to avoid timezone issues with date-only comparison
+    start.setHours(12, 0, 0, 0);
+    end.setHours(12, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid dates' });
+    }
+
+    if (end < start) {
+      return res.status(400).json({ error: 'End date cannot be before start date' });
+    }
+
+    // Prevent retroactive leave (cannot apply for past dates)
+    // if (start < today) {
+    //    return res.status(400).json({ error: 'Cannot apply for leave in the past' });
+    // }
+
+    // Calculate days excluding holidays
+    const diffTime = Math.abs(end - start);
+    const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    // Fetch overlapping holidays
+    // Note: ensure date format matches DB or use comparison
+    const [holidayRows] = await db.execute(
+      'SELECT COUNT(*) as count FROM holidays WHERE date BETWEEN ? AND ?',
+      [start_date, end_date]
+    );
+    const holidayCount = holidayRows[0].count;
+
+    // Ensure we don't have negative days if user selected only holidays (frontend should prevent this, but safe backend)
+    const diffDays = Math.max(0, totalDays - holidayCount);
+
+    if (diffDays === 0) {
+      return res.status(400).json({ error: 'Selected range consists only of holidays.' });
+    }
+
+    // Check for overlap
+    // Overlap logic: (StartA <= EndB) and (EndA >= StartB)
+    const [existing] = await db.execute(
+      `SELECT id FROM leave_requests 
+       WHERE user_id = ? 
+       AND status != 'rejected'
+       AND status != 'cancelled'
+       AND (start_date <= ? AND end_date >= ?)`,
+      [userId, end_date, start_date]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'You already have a leave request for these dates' });
     }
 
     await db.execute(
-      `INSERT INTO leave_requests (user_id, type, start_date, end_date, reason, status)
-       VALUES (?, ?, ?, ?, ?, 'pending')`,
-      [userId, type, start_date, end_date, reason]
+      `INSERT INTO leave_requests (user_id, type, start_date, end_date, days, reason, document_url, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [userId, type, start_date, end_date, diffDays, reason, documentUrl]
     );
+
+    await logAudit(userId, 'leave_requested', { type, start_date, end_date, days: diffDays });
+
+    // Notify manager? (Optional future step)
 
     res.status(201).json({ message: 'Leave request submitted' });
   } catch (error) {
     console.error('Create leave request error:', error);
     res.status(500).json({ error: 'Failed to create leave request' });
+  }
+}
+
+export async function cancelLeave(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    const leaveId = parseInt(req.params.leaveId, 10);
+
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Verify leave exists and belongs to user and is pending
+    const [leave] = await db.execute(
+      'SELECT id, status FROM leave_requests WHERE id = ? AND user_id = ?',
+      [leaveId, userId]
+    );
+
+    if (leave.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
+    }
+
+    if (leave[0].status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending leave requests can be cancelled' });
+    }
+
+    await db.execute(
+      "DELETE FROM leave_requests WHERE id = ?",
+      [leaveId]
+    );
+
+    await logAudit(userId, 'leave_cancelled', { leave_id: leaveId });
+
+    res.json({ message: 'Leave request cancelled successfully' });
+  } catch (error) {
+    console.error('Cancel leave error:', error);
+    res.status(500).json({ error: 'Failed to cancel leave request' });
   }
 }
 
@@ -392,6 +475,10 @@ export async function getNotifications(req, res) {
   }
 }
 
+import bcrypt from 'bcrypt';
+
+const BCRYPT_SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 10);
+
 export async function updateEmployeeProfile(req, res) {
   try {
     const userId = parseInt(req.params.id, 10);
@@ -399,12 +486,31 @@ export async function updateEmployeeProfile(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { name, display_name, bio } = req.body;
+    const { name, display_name, bio, phone, address, emergency_contact } = req.body;
 
-    if (name) {
-      await db.execute('UPDATE employees SET name = ? WHERE id = ?', [name, userId]);
+    // Update editable fields in employees table
+    // Note: display_name and bio are in 'profiles' table, others in 'employees'
+    const userUpdates = [];
+    const userParams = [];
+
+    // We allow name update here too as per previous logic, but prompt says "Name ... View no edit".
+    // Actually, prompt says "only View no edit their details (Name...)" and "Edit limited fields (Phone number, address, emergency contact)".
+    // So I should RESTRICT 'name' update if role is employee.
+    // However, the existing code permitted 'name' update `if (name) ...`. 
+    // I will remove 'name' update for employees to strictly follow "View no edit".
+    // But if admin calls this, maybe they want to update name? Admin has their own update route.
+    // I will remove 'name' update here to comply with request for "employee profile" specifically.
+
+    if (phone !== undefined) { userUpdates.push('phone = ?'); userParams.push(phone); }
+    if (address !== undefined) { userUpdates.push('address = ?'); userParams.push(address); }
+    if (emergency_contact !== undefined) { userUpdates.push('emergency_contact = ?'); userParams.push(emergency_contact); }
+
+    if (userUpdates.length > 0) {
+      userParams.push(userId);
+      await db.execute(`UPDATE employees SET ${userUpdates.join(', ')} WHERE id = ?`, userParams);
     }
 
+    // Update Profile table
     const [profiles] = await db.execute(
       'SELECT id FROM profiles WHERE user_id = ?',
       [userId]
@@ -426,6 +532,37 @@ export async function updateEmployeeProfile(req, res) {
   } catch (error) {
     console.error('Update employee profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+}
+
+export async function changePassword(req, res) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!isSelfOrAdmin(req.user, userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || !currentPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    const [rows] = await db.execute('SELECT password_hash FROM employees WHERE id = ?', [userId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const user = rows[0];
+
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+    await db.execute('UPDATE employees SET password_hash = ? WHERE id = ?', [hash, userId]);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 }
 
@@ -602,8 +739,7 @@ export async function markCheckout(req, res) {
     const totalMinutes = workHoursResult[0]?.minutes || 0;
     const totalHoursDecimal = totalMinutes / 60;
     const totalHours = parseFloat(totalHoursDecimal.toFixed(2));
-    const overtimeHoursDecimal = Math.max(0, totalHoursDecimal - 8);
-    const overtimeHours = parseFloat(overtimeHoursDecimal.toFixed(2));
+    const overtimeHours = 0; // Overtime removed from project
 
     // Insert or update work_hours record
     await db.execute(
@@ -635,7 +771,7 @@ export async function markCheckout(req, res) {
     res.json({
       message: 'Checkout marked successfully',
       total_hours: totalHours,
-      overtime_hours: overtimeHours
+      overtime_hours: 0
     });
   } catch (error) {
     console.error('Mark checkout error:', error);

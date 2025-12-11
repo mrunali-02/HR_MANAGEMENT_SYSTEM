@@ -12,12 +12,10 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   LineChart,
   Line,
 } from 'recharts';
+import CalendarView from '../components/CalendarView';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -27,6 +25,7 @@ const TABS = {
   LEAVE_APPLICATIONS: 'leaveApplications',
   REPORTS: 'reports',
   AUDIT_LOGS: 'auditLogs',
+  CALENDAR: 'calendar',
   SETTINGS: 'settings',
 };
 
@@ -48,6 +47,7 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
   const [users, setUsers] = useState([]);
   const [leaveApplications, setLeaveApplications] = useState([]);
+  const [holidays, setHolidays] = useState([]); // [NEW] Holidays state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -91,6 +91,11 @@ function AdminDashboard() {
     joined_on: '',
     address: '',
     contact_number: '',
+    dob: '',
+    gender: '',
+    blood_group: '',
+    nationality: '',
+    emergency_contact: '',
   });
 
   // ✅ Settings state moved to top-level (not inside renderSettings)
@@ -129,7 +134,6 @@ function AdminDashboard() {
     plannedLeave: 0,
     casualLeave: 0,
     sickLeave: 0,
-    emergencyLeave: 0,
     year: new Date().getFullYear(),
   });
   const [selectedLeave, setSelectedLeave] = useState(null);
@@ -147,9 +151,6 @@ function AdminDashboard() {
     },
     workHours: {
       maxWorkHoursPerDay: 9,
-      overtimeRateMultiplier: 1.5,
-      allowOvertimeSubmission: true,
-      requireReasonForOvertime: true,
     },
     leavePolicy: {
       annualLeave: 20,
@@ -232,11 +233,61 @@ function AdminDashboard() {
       fetchLeaveApplications(),
       fetchSettings(),
       fetchDashboardSummary(),
-      fetchNotes()
+      fetchNotes(),
+      fetchHolidays() // [NEW]
     ]).finally(() => {
       setLoading(false);
     });
   }, [user, navigate]);
+
+  // ... (existing code)
+
+  const fetchHolidays = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/holidays`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHolidays(response.data.holidays || []);
+    } catch (err) {
+      console.error('Error fetching holidays:', err);
+    }
+  };
+
+  const handleToggleHoliday = async (dateStr, isHoliday) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (isHoliday) {
+        // Find holiday with local date comparison
+        const holiday = holidays.find(h => {
+          let hDate = h.date;
+          if (typeof h.date === 'string') {
+            const d = new Date(h.date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            hDate = `${year}-${month}-${day}`;
+          }
+          return hDate === dateStr;
+        });
+
+        if (holiday && window.confirm(`Delete holiday "${holiday.name}"?`)) {
+          await axios.delete(`${API_BASE_URL}/holidays/${holiday.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } else {
+        const name = prompt('Enter holiday name:');
+        if (!name) return;
+        await axios.post(`${API_BASE_URL}/holidays`, { date: dateStr, name }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      fetchHolidays();
+    } catch (err) {
+      alert('Failed to update holiday: ' + (err.response?.data?.error || err.message));
+    }
+  };
 
   useEffect(() => {
     if (activeTab === TABS.AUDIT_LOGS) {
@@ -343,7 +394,6 @@ function AdminDashboard() {
         plannedLeave: 0,
         casualLeave: 0,
         sickLeave: 0,
-        emergencyLeave: 0,
         year: new Date().getFullYear(),
       });
     } catch (err) {
@@ -604,6 +654,11 @@ function AdminDashboard() {
       joined_on: '',
       address: '',
       status: 'active',
+      dob: '',
+      gender: '',
+      blood_group: '',
+      nationality: '',
+      emergency_contact: '',
     });
     setSelectedEmployee(null);
   };
@@ -630,6 +685,11 @@ function AdminDashboard() {
             joined_on: formData.joined_on || null,
             address: formData.address || null,
             status: formData.status || 'active',
+            dob: formData.dob || null,
+            gender: formData.gender || null,
+            blood_group: formData.blood_group || null,
+            nationality: formData.nationality || null,
+            emergency_contact: formData.emergency_contact || null,
           },
           {
             headers: {
@@ -915,6 +975,7 @@ function AdminDashboard() {
   );
 
   const handleEditClick = (employee) => {
+    console.log('Editing employee:', employee);
     setSelectedEmployee(employee);
     setShowAddForm(true);
     setTabErrors(prev => {
@@ -939,6 +1000,11 @@ function AdminDashboard() {
       joined_on: employee.joined_on ? employee.joined_on.substring(0, 10) : '',
       address: employee.address || '',
       status: employee.status || 'active',
+      dob: employee.dob ? employee.dob.substring(0, 10) : '',
+      gender: employee.gender || '',
+      blood_group: employee.blood_group || '',
+      nationality: employee.nationality || '',
+      emergency_contact: employee.emergency_contact || '',
     });
   };
 
@@ -1137,6 +1203,71 @@ function AdminDashboard() {
                     onClick={(e) => e.target.showPicker && e.target.showPicker()}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.dob}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    onKeyDown={(e) => e.preventDefault()}
+                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Gender</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Blood Group</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.blood_group}
+                    onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
+                  >
+                    <option value="">Select Blood Group</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Nationality</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.nationality}
+                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Emergency Contact</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.emergency_contact}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, emergency_contact: value });
+                    }}
+                    maxLength={15}
+                  />
+                </div>
                 <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700">Address</label>
                   <textarea
@@ -1271,13 +1402,22 @@ function AdminDashboard() {
   const renderLeaveApplications = () => {
     // Sort by leave type
     const sortedLeaves = [...leaveApplications].sort((a, b) => {
-      const typeOrder = { 'paid': 1, 'casual': 2, 'sick': 3, 'emergency': 4 };
+      const typeOrder = { 'planned': 1, 'casual': 2, 'sick': 3 };
       return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
     });
 
     const handleLeaveRowClick = (leave) => {
       setSelectedLeave(leave);
       setShowLeaveModal(true);
+    };
+
+    const calculateDays = (start, end) => {
+      if (!start || !end) return 0;
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (endDate < startDate) return 0;
+      const diffTime = Math.abs(endDate - startDate);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     };
 
     return (
@@ -1301,7 +1441,7 @@ function AdminDashboard() {
           <h3 className="text-lg font-semibold mb-4 text-gray-900">
             Total Number of Leaves for {leaveStatistics.year}
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="text-sm text-blue-600 font-medium">Planned Leave</div>
               <div className="text-2xl font-bold text-blue-800 mt-1">{leaveStatistics.plannedLeave}</div>
@@ -1313,10 +1453,6 @@ function AdminDashboard() {
             <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
               <div className="text-sm text-orange-600 font-medium">Sick Leave</div>
               <div className="text-2xl font-bold text-orange-800 mt-1">{leaveStatistics.sickLeave}</div>
-            </div>
-            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-              <div className="text-sm text-red-600 font-medium">Emergency Leave</div>
-              <div className="text-2xl font-bold text-red-800 mt-1">{leaveStatistics.emergencyLeave}</div>
             </div>
           </div>
         </div>
@@ -1334,6 +1470,9 @@ function AdminDashboard() {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Period
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Days
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Reason
@@ -1360,7 +1499,10 @@ function AdminDashboard() {
                       {la.type === 'paid' ? 'Planned' : la.type}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {la.start_date} → {la.end_date}
+                      {la.start_date ? la.start_date.substring(0, 10) : ''} → {la.end_date ? la.end_date.substring(0, 10) : ''}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                      {la.days || calculateDays(la.start_date, la.end_date)}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">
                       {la.reason || '-'}
@@ -1371,7 +1513,9 @@ function AdminDashboard() {
                           ? 'bg-green-100 text-green-800'
                           : la.status === 'rejected'
                             ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            : la.status === 'cancelled'
+                              ? 'bg-gray-100 text-gray-500'
+                              : 'bg-yellow-100 text-yellow-800'
                           }`}
                       >
                         {la.status}
@@ -1381,8 +1525,8 @@ function AdminDashboard() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleApproveLeave(la.id)}
-                          disabled={la.status === 'approved' || processingLeaveId === la.id}
-                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${la.status === 'approved' || processingLeaveId === la.id
+                          disabled={la.status === 'approved' || la.status === 'cancelled' || processingLeaveId === la.id}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${la.status === 'approved' || la.status === 'cancelled' || processingLeaveId === la.id
                             ? 'bg-green-400 cursor-not-allowed'
                             : 'bg-green-600 hover:bg-green-700'
                             }`}
@@ -1391,8 +1535,8 @@ function AdminDashboard() {
                         </button>
                         <button
                           onClick={() => handleRejectLeave(la.id)}
-                          disabled={la.status === 'rejected' || processingLeaveId === la.id}
-                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${la.status === 'rejected' || processingLeaveId === la.id
+                          disabled={la.status === 'rejected' || la.status === 'cancelled' || processingLeaveId === la.id}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${la.status === 'rejected' || la.status === 'cancelled' || processingLeaveId === la.id
                             ? 'bg-red-400 cursor-not-allowed'
                             : 'bg-red-600 hover:bg-red-700'
                             }`}
@@ -1407,7 +1551,7 @@ function AdminDashboard() {
                   <tr>
                     <td
                       className="px-4 py-4 text-center text-sm text-gray-500"
-                      colSpan={6}
+                      colSpan={7}
                     >
                       No leave applications to display yet.
                     </td>
@@ -1453,13 +1597,30 @@ function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.start_date}</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.start_date ? selectedLeave.start_date.substring(0, 10) : ''}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">End Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.end_date}</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.end_date ? selectedLeave.end_date.substring(0, 10) : ''}</p>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Duration</label>
+                    <p className="mt-1 text-sm text-gray-900 font-bold">{selectedLeave.days || calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days</p>
+                  </div>
+                  {selectedLeave.document_url && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Attached Document</label>
+                      <a
+                        href={`${API_BASE_URL.replace('/api', '')}/${selectedLeave.document_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 block text-sm text-indigo-600 hover:text-indigo-800 underline"
+                      >
+                        View Document
+                      </a>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Reason</label>
                     <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{selectedLeave.reason || 'No reason provided'}</p>
@@ -1471,7 +1632,9 @@ function AdminDashboard() {
                         ? 'bg-green-100 text-green-800'
                         : selectedLeave.status === 'rejected'
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : selectedLeave.status === 'cancelled'
+                            ? 'bg-gray-100 text-gray-500'
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}
                     >
                       {selectedLeave.status}
@@ -1869,6 +2032,22 @@ function AdminDashboard() {
       </div>
     );
   };
+
+  const renderCalendar = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">Calendar & Holidays</h2>
+      </div>
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <p className="mb-4 text-sm text-gray-600">Click on any date to mark/unmark a holiday.</p>
+        <CalendarView
+          holidays={holidays}
+          role="admin"
+          onDateClick={handleToggleHoliday}
+        />
+      </div>
+    </div>
+  );
 
   const renderSettings = () => {
     const renderAccountSettings = () => (
@@ -2309,6 +2488,15 @@ function AdminDashboard() {
             Leave Applications
           </button>
           <button
+            onClick={() => setActiveTab(TABS.CALENDAR)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Calendar & Holidays
+          </button>
+          <button
             onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.AUDIT_LOGS
               ? 'bg-slate-800 text-white'
@@ -2355,6 +2543,7 @@ function AdminDashboard() {
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
+              {activeTab === TABS.CALENDAR && 'Calendar & Holidays'}
               {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
               {activeTab === TABS.REPORTS && 'Reports'}
               {activeTab === TABS.SETTINGS && 'Settings'}
@@ -2370,6 +2559,7 @@ function AdminDashboard() {
           {activeTab === TABS.DASHBOARD && renderDashboard()}
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+          {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.SETTINGS && renderSettings()}

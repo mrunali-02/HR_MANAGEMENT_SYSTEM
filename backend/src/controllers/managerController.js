@@ -217,6 +217,8 @@ export async function getTeamLeaveRequests(req, res) {
         lr.type,
         DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date,
         DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date,
+        lr.days,
+        lr.document_url,
         lr.reason,
         lr.status,
         lr.created_at,
