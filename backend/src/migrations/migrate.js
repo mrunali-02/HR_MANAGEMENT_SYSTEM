@@ -275,11 +275,11 @@ async function migrate() {
         INDEX idx_user_year (user_id, year)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  });
-  console.log('✓ Created leave_balances table');
 
-  // Create work_hours table
-  await connection.execute(`
+    console.log('✓ Created leave_balances table');
+
+    // Create work_hours table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS work_hours (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -298,10 +298,10 @@ async function migrate() {
         INDEX idx_work_date (work_date)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created work_hours table');
+    console.log('✓ Created work_hours table');
 
-  // Create overtime table
-  await connection.execute(`
+    // Create overtime table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS overtimes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -313,10 +313,10 @@ async function migrate() {
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created overtimes table');
+    console.log('✓ Created overtimes table');
 
-  // Create audit logs table
-  await connection.execute(`
+    // Create audit logs table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
@@ -326,10 +326,10 @@ async function migrate() {
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created audit_logs table');
+    console.log('✓ Created audit_logs table');
 
-  // Create failed logins table
-  await connection.execute(`
+    // Create failed logins table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS failed_logins (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL,
@@ -339,10 +339,10 @@ async function migrate() {
         INDEX idx_failed_email (email)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created failed_logins table');
+    console.log('✓ Created failed_logins table');
 
-  // Create notifications table
-  await connection.execute(`
+    // Create notifications table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -353,10 +353,10 @@ async function migrate() {
         INDEX idx_notifications_user (user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created notifications table');
+    console.log('✓ Created notifications table');
 
-  // Create admin notes table
-  await connection.execute(`
+    // Create admin notes table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS admin_notes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -366,10 +366,10 @@ async function migrate() {
         INDEX idx_admin_notes_user (user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created admin_notes table');
+    console.log('✓ Created admin_notes table');
 
-  // Create settings table
-  await connection.execute(`
+    // Create settings table
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
         category VARCHAR(50) UNIQUE NOT NULL,
@@ -377,59 +377,59 @@ async function migrate() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-  console.log('✓ Created settings table');
+    console.log('✓ Created settings table');
 
-  // Create admin if ADMIN_EMAIL and ADMIN_PASSWORD are set
-  const adminEmail = process.env.ADMIN_EMAIL?.trim();
-  const adminPassword = process.env.ADMIN_PASSWORD?.trim();
+    // Create admin if ADMIN_EMAIL and ADMIN_PASSWORD are set
+    const adminEmail = process.env.ADMIN_EMAIL?.trim();
+    const adminPassword = process.env.ADMIN_PASSWORD?.trim();
 
-  if (adminEmail && adminPassword) {
-    // Check if admin already exists
-    const [existing] = await connection.execute(
-      'SELECT id FROM employees WHERE email = ? AND role = ?',
-      [adminEmail, 'admin']
-    );
-
-    if (existing.length === 0) {
-      const passwordHash = await hashPassword(adminPassword);
-      await connection.execute(
-        'INSERT INTO employees (email, password_hash, role, name) VALUES (?, ?, ?, ?)',
-        [adminEmail, passwordHash, 'admin', 'Administrator']
+    if (adminEmail && adminPassword) {
+      // Check if admin already exists
+      const [existing] = await connection.execute(
+        'SELECT id FROM employees WHERE email = ? AND role = ?',
+        [adminEmail, 'admin']
       );
 
-      const [admin] = await connection.execute(
-        'SELECT id FROM employees WHERE email = ?',
-        [adminEmail]
-      );
+      if (existing.length === 0) {
+        const passwordHash = await hashPassword(adminPassword);
+        await connection.execute(
+          'INSERT INTO employees (email, password_hash, role, name) VALUES (?, ?, ?, ?)',
+          [adminEmail, passwordHash, 'admin', 'Administrator']
+        );
 
-      // Create profile for admin
-      await connection.execute(
-        'INSERT INTO profiles (user_id, display_name) VALUES (?, ?)',
-        [admin[0].id, 'Administrator']
-      );
-      console.log(`✓ Created admin user: ${adminEmail}`);
+        const [admin] = await connection.execute(
+          'SELECT id FROM employees WHERE email = ?',
+          [adminEmail]
+        );
+
+        // Create profile for admin
+        await connection.execute(
+          'INSERT INTO profiles (user_id, display_name) VALUES (?, ?)',
+          [admin[0].id, 'Administrator']
+        );
+        console.log(`✓ Created admin user: ${adminEmail}`);
 
 
+      } else {
+        console.log(`⚠ Admin with email ${adminEmail} already exists, skipping creation`);
+
+      }
     } else {
-      console.log(`⚠ Admin with email ${adminEmail} already exists, skipping creation`);
-
+      console.log('⚠ ADMIN_EMAIL and/or ADMIN_PASSWORD not set - no admin user created');
+      console.log('  You can create an admin later using the create-admin script or manually via SQL');
     }
-  } else {
-    console.log('⚠ ADMIN_EMAIL and/or ADMIN_PASSWORD not set - no admin user created');
-    console.log('  You can create an admin later using the create-admin script or manually via SQL');
-  }
 
-  console.log('\n✓ Migration completed successfully!');
-} catch (error) {
-  console.error('✗ Migration failed:', error);
-  process.exit(1);
-} finally {
-  if (connection) {
-    connection.release();
+    console.log('\n✓ Migration completed successfully!');
+  } catch (error) {
+    console.error('✗ Migration failed:', error);
+    process.exit(1);
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+    await db.end();
+    process.exit(0);
   }
-  await db.end();
-  process.exit(0);
-}
 }
 
 migrate();

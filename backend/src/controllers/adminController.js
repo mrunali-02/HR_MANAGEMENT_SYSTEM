@@ -1081,6 +1081,58 @@ export async function getLeaveReport(req, res) {
   }
 }
 
+/* ======================
+     DATA EXPORT for ADMIN
+====================== */
+export async function exportAttendance(req, res) {
+  try {
+    const query = `
+      SELECT 
+        a.id, a.user_id, e.name as employee_name, e.department,
+        a.attendance_date as date, a.status, 
+        a.check_in_time, a.check_out_time, 
+        TIME_FORMAT(
+          SEC_TO_TIME(
+            TIMESTAMPDIFF(
+              SECOND,
+              CONCAT(a.attendance_date, ' ', a.check_in_time),
+              CONCAT(a.attendance_date, ' ', a.check_out_time)
+            )
+          ),
+          '%H:%i'
+        ) as total_hours
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      ORDER BY a.attendance_date DESC
+    `;
+    const [rows] = await db.execute(query);
+    res.json(rows);
+  } catch (error) {
+    console.error('Export attendance error:', error);
+    res.status(500).json({ error: 'Failed to export attendance' });
+  }
+}
+
+export async function exportLeaves(req, res) {
+  try {
+    const query = `
+      SELECT 
+        lr.id, lr.user_id, e.name as employee_name, e.department,
+        lr.type, lr.start_date, lr.end_date, 
+        (DATEDIFF(lr.end_date, lr.start_date) + 1) as days,
+        lr.reason, lr.status, lr.created_at
+      FROM leave_requests lr
+      JOIN employees e ON lr.user_id = e.id
+      ORDER BY lr.created_at DESC
+    `;
+    const [rows] = await db.execute(query);
+    res.json(rows);
+  } catch (error) {
+    console.error('Export leaves error:', error);
+    res.status(500).json({ error: 'Failed to export leaves' });
+  }
+}
+
 export async function getEmployeeRoleStats(req, res) {
   try {
     const [stats] = await db.execute(`

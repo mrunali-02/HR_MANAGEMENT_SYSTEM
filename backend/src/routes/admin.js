@@ -49,6 +49,8 @@ import {
   getAttendanceReport,
   getLeaveReport,
   getEmployeeRoleStats,
+  exportAttendance,
+  exportLeaves,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -98,6 +100,12 @@ router.put('/attendance-corrections/:id/reject', authToken, requireRole('admin')
 router.get('/overtimes', authToken, requireRole('admin'), getOvertimes);
 router.put('/overtimes/:id/approve', authToken, requireRole('admin'), approveOvertime);
 router.put('/overtimes/:id/reject', authToken, requireRole('admin'), rejectOvertime);
+
+// Reports & Export
+router.get('/reports/attendance', authToken, requireRole('admin'), getAttendanceReport);
+router.get('/reports/leaves', authToken, requireRole('admin'), getLeaveReport);
+router.get('/export/attendance', authToken, requireRole('admin'), exportAttendance);
+router.get('/export/leaves', authToken, requireRole('admin'), exportLeaves);
 
 // Analytics & Audit
 router.get('/analytics', authToken, requireRole('admin'), getHrAnalytics);

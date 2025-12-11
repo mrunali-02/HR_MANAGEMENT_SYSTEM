@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -16,6 +16,8 @@ import {
   Line,
 } from 'recharts';
 import CalendarView from '../components/CalendarView';
+import EmployeeReports from '../components/EmployeeReports';
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -76,6 +78,7 @@ function AdminDashboard() {
   // Tab-specific error and success messages
   const [tabErrors, setTabErrors] = useState({});
   const [tabSuccess, setTabSuccess] = useState({});
+  const [reportData, setReportData] = useState({ attendance: [], leaves: [] });
   const [processingLeaveId, setProcessingLeaveId] = useState(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -98,7 +101,7 @@ function AdminDashboard() {
     emergency_contact: '',
   });
 
-  // ✅ Settings state moved to top-level (not inside renderSettings)
+  // âœ… Settings state moved to top-level (not inside renderSettings)
   const [profileInfo, setProfileInfo] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -296,7 +299,30 @@ function AdminDashboard() {
     if (activeTab === TABS.LEAVE_APPLICATIONS) {
       fetchLeaveStatistics();
     }
+    if (activeTab === TABS.REPORTS) {
+      fetchReportData();
+    }
   }, [activeTab]);
+
+  const fetchReportData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const [attRes, leaveRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/admin/export/attendance`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_BASE_URL}/admin/export/leaves`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      console.log('Reports Data:', { attendance: attRes.data, leaves: leaveRes.data });
+      setReportData({
+        attendance: attRes.data,
+        leaves: leaveRes.data
+      });
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleBackLogout = () => {
@@ -837,7 +863,7 @@ function AdminDashboard() {
         </div>
 
         <div className="rounded-xl p-5 shadow-sm bg-[#B3E5FC]/60 border border-[#B3E5FC]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Today’s Leaves</div>
+          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Todayâ€™s Leaves</div>
           <div className="mt-2 text-3xl font-bold text-gray-800">{leavesTodayCount}</div>
         </div>
 
@@ -1209,6 +1235,7 @@ function AdminDashboard() {
                     type="date"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.dob}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                     onKeyDown={(e) => e.preventDefault()}
                     onClick={(e) => e.target.showPicker && e.target.showPicker()}
@@ -1499,7 +1526,7 @@ function AdminDashboard() {
                       {la.type === 'paid' ? 'Planned' : la.type}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {la.start_date ? la.start_date.substring(0, 10) : ''} → {la.end_date ? la.end_date.substring(0, 10) : ''}
+                      {la.start_date ? la.start_date.substring(0, 10) : ''} â†’ {la.end_date ? la.end_date.substring(0, 10) : ''}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
                       {la.days || calculateDays(la.start_date, la.end_date)}
@@ -1712,7 +1739,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  Time {auditSortBy === 'time' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  Time {auditSortBy === 'time' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -1725,7 +1752,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  User {auditSortBy === 'user' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  User {auditSortBy === 'user' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -1738,7 +1765,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  Activity {auditSortBy === 'activity' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  Activity {auditSortBy === 'activity' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Metadata
@@ -1849,189 +1876,16 @@ function AdminDashboard() {
     </div>
   );
 
-  const renderReports = () => {
-    // employees by role (re-calculated for completeness, or use API data if available, but for now using local state derived from existing users list if needed, OR just using the fetched roleReport if we rely on that. The user asked for "Employees by Role chart", existing one uses `users` state. I'll stick to `roleData` derived from `users` as it works, but add the Export button).
-    // Actually, `roleReport` fetched from API is better if pagination is involved in `users`. But `users` usually contains all for small orgs.
-    // Let's us `roleData` as defined currently for the Chart, and `downloadCSV` on it.
-
-    // Recalculate for local usage
-    const employeeCount = users.filter((u) => u.role === 'employee').length;
-    const managerCount = totalManagers;
-    const hrCount = totalHr;
-    const adminCount = totalAdmins;
-
-    const roleData = [
-      { name: 'Employee', value: employeeCount },
-      { name: 'Manager', value: managerCount },
-      { name: 'HR', value: hrCount },
-      { name: 'Admin', value: adminCount },
-    ].filter((item) => item.value > 0);
-
-    const PIE_COLORS = ['#3b82f6', '#22c55e', '#eab308', '#ef4444'];
-
-    return (
-      <div className="space-y-8">
-        <h2 className="text-2xl font-bold text-gray-900">Reports Dashboard</h2>
-
-        {/* Attendance Report Section */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h3 className="text-lg font-semibold text-gray-800">Attendance Report</h3>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={attendanceFilter.startDate}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, startDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={attendanceFilter.endDate}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, endDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Department</label>
-                <input
-                  type="text"
-                  placeholder="All Depts"
-                  value={attendanceFilter.department}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, department: e.target.value })}
-                  className="border border-gray-300 rounded w-24 px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <button
-                onClick={() => fetchDetailedReports()}
-                className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => downloadCSV(attendanceReport, 'attendance_report.csv')}
-                className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-              >
-                Export to Excel
-              </button>
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={attendanceReport} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="present" fill="#22c55e" name="Present" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="absent" fill="#ef4444" name="Absent" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="late" fill="#f97316" name="Late" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="half_day" fill="#eab308" name="Half Day" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Leave Summary Report Section */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h3 className="text-lg font-semibold text-gray-800">Leave Summary</h3>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={leaveFilter.startDate}
-                  onChange={(e) => setLeaveFilter({ ...leaveFilter, startDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={leaveFilter.endDate}
-                  onChange={(e) => setLeaveFilter({ ...leaveFilter, endDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <button
-                onClick={() => fetchDetailedReports()}
-                className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => downloadCSV(leaveReportData, 'leave_report.csv')}
-                className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-              >
-                Export to Excel
-              </button>
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leaveReportData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend />
-                <Bar dataKey="sick" stackId="a" fill="#ef4444" name="Sick" radius={[0, 0, 4, 4]} />
-                <Bar dataKey="casual" stackId="a" fill="#22c55e" name="Casual" />
-                <Bar dataKey="planned" stackId="a" fill="#3b82f6" name="Planned" />
-                <Bar dataKey="other" stackId="a" fill="#a855f7" name="Other" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Employees by Role Chart */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Employees by Role</h3>
-            <button
-              onClick={() => downloadCSV(roleData, 'employees_role_report.csv')}
-              className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-            >
-              Export to Excel
-            </button>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={roleData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {roleData.map((entry, index) => (
-                    <Cell key={`role-cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderReports = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Organization Reports</h2>
+      <EmployeeReports
+        attendanceData={reportData.attendance}
+        leaveData={reportData.leaves}
+        employees={users}
+      />
+    </div>
+  );
 
   const renderCalendar = () => (
     <div className="space-y-6">
@@ -2443,6 +2297,8 @@ function AdminDashboard() {
       </div>
     );
   };
+
+
 
   if (loading) {
     return (

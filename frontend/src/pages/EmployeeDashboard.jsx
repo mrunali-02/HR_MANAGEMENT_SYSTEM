@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import './EmployeeDashboard.css';
 import CalendarView from '../components/CalendarView';
+import EmployeeReports from '../components/EmployeeReports';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -606,6 +607,15 @@ function EmployeeDashboard() {
             Leaves
           </button>
           <button
+            onClick={() => setActiveTab('reports')}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'reports'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Reports
+          </button>
+          <button
             onClick={() => setActiveTab('settings')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'settings'
               ? 'bg-slate-800 text-white'
@@ -1118,6 +1128,14 @@ function EmployeeDashboard() {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* REPORTS TAB */}
+          {activeTab === 'reports' && (
+            <div className="space-y-8 max-w-6xl mx-auto pb-10">
+              <h2 className="text-2xl font-bold text-gray-900">Reports</h2>
+              <EmployeeReports attendanceData={attendanceRecords} leaveData={leaveHistory} />
             </div>
           )}
 
