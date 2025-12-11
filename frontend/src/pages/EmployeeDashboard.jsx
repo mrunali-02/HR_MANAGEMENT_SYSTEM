@@ -170,36 +170,69 @@ function EmployeeDashboard() {
 
     setError('');
     setSuccess('');
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(
-        `${API_BASE_URL}/employee/${id}/attendance/mark`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
 
-      // Only set success if we're on the attendance tab
-      if (activeTab === 'attendance') {
-        setSuccess('Attendance marked successfully!');
-        // Clear after 3 seconds
-        setTimeout(() => setSuccess(''), 3000);
-      }
-
-      // Mark as attended and refresh attendance
-      setAttendanceMarked(true);
-      const token2 = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token2}` };
-      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
-      setAttendanceRecords(attRes.data.records || []);
-      setTodayAttendance(attRes.data.today || null);
-      setCheckoutMarked(!!attRes.data.today?.check_out);
-    } catch (err) {
-      console.error('Error marking attendance:', err);
-      if (activeTab === 'attendance') {
-        setError(err.response?.data?.error || 'Failed to mark attendance');
-        setTimeout(() => setError(''), 5000);
-      }
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    if (!confirmCheckIn) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+
+          const token = localStorage.getItem('token');
+          await axios.post(
+            `${API_BASE_URL}/employee/${id}/attendance/mark`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+
+          // Show message regardless of tab
+          setSuccess('Attendance marked successfully!');
+          setTimeout(() => setSuccess(''), 3000);
+
+          setAttendanceMarked(true);
+          // Refresh data
+          const token2 = localStorage.getItem('token');
+          const headers = { Authorization: `Bearer ${token2}` };
+          const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+          setAttendanceRecords(attRes.data.records || []);
+          setTodayAttendance(attRes.data.today || null);
+          setCheckoutMarked(!!attRes.data.today?.check_out);
+        } catch (err) {
+          console.error('Error marking attendance:', err);
+          let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
+
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+
+          setError(errorMsg);
+          // Clear location fetching message if error occurs
+          if (success === 'Fetching location...') setSuccess('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+
+        setError(msg);
+        setSuccess('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleCheckout = async () => {
@@ -445,12 +478,12 @@ function EmployeeDashboard() {
         {/* Scrollable Content */}
         <main className="flex-1 p-6 overflow-y-auto">
           {/* Show error/success only on relevant tabs */}
-          {activeTab === 'attendance' && error && (
+          {(activeTab === 'attendance' || activeTab === 'dashboard') && error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">
               {error}
             </div>
           )}
-          {activeTab === 'attendance' && success && (
+          {(activeTab === 'attendance' || activeTab === 'dashboard') && success && (
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 text-sm">
               {success}
             </div>
@@ -471,10 +504,10 @@ function EmployeeDashboard() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 
                 {/* 1. Attendance Card (Blue Gradient) */}
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between">
+                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between h-full">
                   <div>
                     <div className="text-sm uppercase tracking-wide opacity-80">Today's Status</div>
                     <div className="mt-2 text-2xl font-bold">
@@ -534,13 +567,15 @@ function EmployeeDashboard() {
                 </div>
 
                 {/* 2. Leave Balance (Green Gradient) */}
-                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-5 shadow-lg">
-                  <div className="text-sm uppercase tracking-wide opacity-80">Leave Balance</div>
-                  <div className="mt-2 text-3xl font-bold">
-                    {leaveBalance.total - leaveBalance.used}/{leaveBalance.total}
-                  </div>
-                  <div className="mt-1 text-xs opacity-80">
-                    Days Remaining
+                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-5 shadow-lg h-full flex flex-col justify-between">
+                  <div>
+                    <div className="text-sm uppercase tracking-wide opacity-80">Leave Balance</div>
+                    <div className="mt-2 text-3xl font-bold">
+                      {leaveBalance.total - leaveBalance.used}/{leaveBalance.total}
+                    </div>
+                    <div className="mt-1 text-xs opacity-80">
+                      Days Remaining
+                    </div>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-1 text-xs opacity-90 font-medium">
                     <div className="flex flex-col items-center">
@@ -558,40 +593,52 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Last Leave Status (Sky Gradient) */}
-                <div className="bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-xl p-5 shadow-lg">
-                  <div className="text-sm uppercase tracking-wide opacity-80">Last Request</div>
-                  {leaveHistory.length > 0 ? (
-                    <>
-                      <div className="mt-2 text-xl font-bold capitalize">
-                        {leaveHistory[0].type}
+                {/* 3. Attendance Rate Card (White) */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-4">
+                      <h3 className="text-sm font-medium text-gray-500">Attendance Rate</h3>
+                      <div className="p-2 bg-blue-50 rounded-full">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </div>
-                      <div className="mt-1 text-xs opacity-80">
-                        {leaveHistory[0].start_date}
-                      </div>
-                      <div className="mt-3 inline-block px-2 py-1 bg-white/20 rounded text-xs font-bold uppercase">
-                        {leaveHistory[0].status}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="mt-2 text-lg font-medium opacity-80">None yet</div>
-                  )}
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {attendanceRecords.length > 0
+                        ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100)
+                        : 0}%
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Based on last 30 days</p>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-4">
+                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${attendanceRecords.length > 0 ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100) : 0}%` }}></div>
+                  </div>
                 </div>
 
-                {/* 4. Notifications (Amber Gradient) */}
-                <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl p-5 shadow-lg">
-                  <div className="text-sm uppercase tracking-wide opacity-80">Notifications</div>
-                  <div className="mt-2 text-3xl font-bold">{notifications.length}</div>
-                  <div className="mt-1 text-xs opacity-80">
-                    New Updates
+                {/* 4. Overtime Hours Card (White) */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-4">
+                      <h3 className="text-sm font-medium text-gray-500">Overtime Hours</h3>
+                      <div className="p-2 bg-orange-50 rounded-full">
+                        <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {attendanceRecords.reduce((acc, curr) => acc + (parseFloat(curr.overtime_hours) || 0), 0).toFixed(1)}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Total Overtime (30 Days)</p>
                   </div>
-                  <div className="mt-2 text-xs truncate opacity-75">
-                    {notifications[0]?.message || 'No new alerts'}
+                  <div className="mt-4 text-xs text-gray-400">
+                    Accumulated overtime.
                   </div>
                 </div>
               </div>
 
-              {/* Recent Notifications List */}
+              {/* Recent Notifications List - Full Width Below Grid */}
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="text-lg font-semibold mb-4 text-gray-900">Recent Notifications</h3>
                 {notifications.length === 0 ? (

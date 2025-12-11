@@ -182,7 +182,7 @@ export async function getAttendance(req, res) {
       total_hours: row.total_hours_calc,
       overtime_hours: row.overtime_hours_calc
     });
-    
+
 
     res.json({
       today: todayRows.length ? mapRow(todayRows[0]) : null,
@@ -193,6 +193,9 @@ export async function getAttendance(req, res) {
     res.status(500).json({ error: 'Failed to fetch attendance' });
   }
 }
+
+// Import geo utils
+import { calculateDistance } from '../utils/geo.js';
 
 export async function markAttendance(req, res) {
   try {
@@ -210,18 +213,57 @@ export async function markAttendance(req, res) {
       return res.status(400).json({ error: 'Attendance already marked for today' });
     }
 
+    // Geolocation Validation
+    const { latitude, longitude, accuracy } = req.body;
+
+    // 1. Check if coords exist
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ error: 'Location data is required for check-in' });
+    }
+
+    // 2. Accuracy check (> 50m reject)
+    if (accuracy && accuracy > 50) {
+      return res.status(400).json({ error: 'GPS accuracy is too low (>50m). Please move to a clearer area.' });
+    }
+
+    // 3. Geofence check
+    // Default office location (Bangalore) if not set in env
+    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '12.9716');
+    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '77.5946');
+    const MAX_DISTANCE = 500; // meters
+
+    const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+
+    if (distance > MAX_DISTANCE) {
+      return res.status(400).json({
+        error: 'You must be within the permitted attendance zone.',
+        distance: Math.round(distance),
+        max_distance: MAX_DISTANCE
+      });
+    }
+
     const now = new Date();
     const nowTime = now.toTimeString().substring(0, 8);
 
     await db.execute(
-      `INSERT INTO attendance (user_id, attendance_date, status, check_in_time)
-       VALUES (?, CURDATE(), 'present', ?)`,
-      [userId, nowTime]
+      `INSERT INTO attendance (
+        user_id, attendance_date, status, check_in_time, 
+        latitude, longitude, geo_accuracy, marked_with_geo
+      ) VALUES (?, CURDATE(), 'present', ?, ?, ?, ?, TRUE)`,
+      [userId, nowTime, latitude, longitude, accuracy || null]
     );
 
-    await logAudit(userId, 'attendance_marked', { attendance_date: new Date().toISOString().split('T')[0], check_in: nowTime });
+    await logAudit(userId, 'attendance_marked', {
+      attendance_date: new Date().toISOString().split('T')[0],
+      check_in: nowTime,
+      location: { lat: latitude, lng: longitude, distance }
+    });
 
-    res.json({ message: 'Attendance marked successfully' });
+    res.json({
+      message: 'Attendance marked with location successfully.',
+      check_in: nowTime,
+      location: { latitude, longitude }
+    });
   } catch (error) {
     console.error('Mark attendance error:', error);
     res.status(500).json({ error: 'Failed to mark attendance' });
@@ -584,13 +626,13 @@ export async function markCheckout(req, res) {
       ]
     );
 
-    await logAudit(userId, 'checkout_marked', { 
+    await logAudit(userId, 'checkout_marked', {
       attendance_id: att.id,
       total_hours: totalHours,
       overtime_hours: overtimeHours
     });
 
-    res.json({ 
+    res.json({
       message: 'Checkout marked successfully',
       total_hours: totalHours,
       overtime_hours: overtimeHours
