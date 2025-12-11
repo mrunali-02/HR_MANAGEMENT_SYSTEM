@@ -863,7 +863,7 @@ function AdminDashboard() {
         </div>
 
         <div className="rounded-xl p-5 shadow-sm bg-[#B3E5FC]/60 border border-[#B3E5FC]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Todayâ€™s Leaves</div>
+          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Today's Leaves</div>
           <div className="mt-2 text-3xl font-bold text-gray-800">{leavesTodayCount}</div>
         </div>
 
