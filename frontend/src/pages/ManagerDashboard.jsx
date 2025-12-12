@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
 const API_BASE_URL =
@@ -13,6 +14,7 @@ const TABS = {
   ATTENDANCE: 'attendance',
   WORK_HOURS: 'workHours',
   LEAVES: 'leaves',
+  CALENDAR: 'calendar',
   REPORTS: 'reports',
   PROFILE: 'profile',
 };
@@ -31,6 +33,13 @@ function ManagerDashboard() {
   const [teamWorkHours, setTeamWorkHours] = useState([]);
   const [teamLeaves, setTeamLeaves] = useState([]);
   const [teamStats, setTeamStats] = useState(null);
+
+  // My Calendar & Attendance
+  const [holidays, setHolidays] = useState([]);
+  const [myAttendanceRecords, setMyAttendanceRecords] = useState([]);
+  const [myTodayAttendance, setMyTodayAttendance] = useState(null);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
 
@@ -109,6 +118,23 @@ function ManagerDashboard() {
       } catch (innerErr) {
         console.error('Manager team data error:', innerErr);
       }
+      // 3) Holidays & My Attendance [NEW]
+      try {
+        const [holidayRes, myAttRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/holidays`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: getAuthHeader() }) // Managers are also employees
+        ]);
+        setHolidays(holidayRes.data.holidays || []);
+
+        setMyAttendanceRecords(myAttRes.data.records || []);
+        setMyTodayAttendance(myAttRes.data.today || null);
+        setAttendanceMarked(myAttRes.data.today?.status === 'present');
+        setCheckoutMarked(!!myAttRes.data.today?.check_out);
+
+      } catch (err) {
+        console.error('Error fetching calendar data:', err);
+      }
+
     } catch (err) {
       console.error('Error loading manager data:', err);
       setError(err.response?.data?.error || 'Failed to load manager dashboard');
@@ -174,6 +200,46 @@ function ManagerDashboard() {
   }
 
   const managerUser = profile?.user;
+
+  // Handlers for My Attendance
+  const handleMarkMyAttendance = async () => {
+    if (attendanceMarked || myTodayAttendance?.status === 'present') return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/employee/${id}/attendance/mark`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Checked in successfully!');
+      // Refresh
+      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
+      setMyAttendanceRecords(attRes.data.records || []);
+      setMyTodayAttendance(attRes.data.today || null);
+      setAttendanceMarked(attRes.data.today?.status === 'present');
+    } catch (err) {
+      console.error(err);
+      alert('Check-in failed');
+    }
+  };
+
+  const handleMyCheckout = async () => {
+    if (!attendanceMarked || !myTodayAttendance?.check_in || checkoutMarked) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE_URL}/employee/${id}/attendance/checkout`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert(`Checked out! Work hours: ${res.data.total_hours}`);
+      // Refresh
+      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
+      setMyAttendanceRecords(attRes.data.records || []);
+      setMyTodayAttendance(attRes.data.today || null);
+      setCheckoutMarked(!!attRes.data.today?.check_out);
+    } catch (err) {
+      console.error(err);
+      alert('Checkout failed');
+    }
+  };
+
 
   // ---------- RENDER SECTIONS BASED ON PRIVILEGES ----------
 
@@ -366,111 +432,139 @@ function ManagerDashboard() {
   );
 
   // LEAVES – Approve team leaves
-  const renderLeaves = () => (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-gray-900">Team Leave Requests</h2>
-      <p className="text-sm text-gray-500">
-        You can approve/reject <strong>only your team&apos;s</strong> leave
-        applications.
-      </p>
+  const renderLeaves = () => {
+    const calculateDays = (start, end) => {
+      if (!start || !end) return 0;
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (endDate < startDate) return 0;
+      const diffTime = Math.abs(endDate - startDate);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    };
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Period
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Reason
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {teamLeaves.map((la) => (
-                <tr key={la.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm text-gray-900">
-                    {la.employee_name || la.employee_email}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-500 capitalize">
-                    {la.type}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-500">
-                    {la.start_date} → {la.end_date}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">
-                    {la.reason || '-'}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        la.status === 'approved'
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold text-gray-900">Team Leave Requests</h2>
+        <p className="text-sm text-gray-500">
+          You can approve/reject <strong>only your team&apos;s</strong> leave
+          applications.
+        </p>
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Employee
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Period
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Days
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Reason (and Document)
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {teamLeaves.map((la) => (
+                  <tr key={la.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {la.employee_name || la.employee_email}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-500 capitalize">
+                      {la.type}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                      {la.start_date} → {la.end_date}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                      {la.days || calculateDays(la.start_date, la.end_date)}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">
+                      {la.reason || '-'}
+                      {la.document_url && (
+                        <a
+                          href={`${API_BASE_URL.replace('/api', '')}/${la.document_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-indigo-600 hover:text-indigo-800 text-xs underline"
+                        >
+                          View Doc
+                        </a>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${la.status === 'approved'
                           ? 'bg-green-100 text-green-800'
                           : la.status === 'rejected'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
-                    >
-                      {la.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right text-sm">
-                    {la.status === 'pending' ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleApproveTeamLeave(la.id)}
-                          className="inline-flex items-center px-3 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleRejectTeamLeave(la.id)}
-                          className="inline-flex items-center px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">
-                        No actions available
+                            ? 'bg-red-100 text-red-800'
+                            : la.status === 'cancelled'
+                              ? 'bg-gray-100 text-gray-500'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                      >
+                        {la.status}
                       </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {teamLeaves.length === 0 && (
-                <tr>
-                  <td
-                    className="px-4 py-4 text-center text-sm text-gray-500"
-                    colSpan={6}
-                  >
-                    No team leave requests yet. Connect
-                    <code className="px-1">
-                      /manager/team/leave-requests
-                    </code>{' '}
-                    API.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm">
+                      {la.status === 'pending' ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleApproveTeamLeave(la.id)}
+                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectTeamLeave(la.id)}
+                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">
+                          No actions available
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {teamLeaves.length === 0 && (
+                  <tr>
+                    <td
+                      className="px-4 py-4 text-center text-sm text-gray-500"
+                      colSpan={7}
+                    >
+                      No team leave requests yet. Connect
+                      <code className="px-1">
+                        /manager/team/leave-requests
+                      </code>{' '}
+                      API.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // REPORTS – Team-level statistics / export info
   const renderReports = () => (
@@ -521,6 +615,50 @@ function ManagerDashboard() {
         >
           Export Team Report (coming soon)
         </button>
+      </div>
+    </div>
+  );
+
+  const renderCalendar = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+        <h2 className="text-2xl font-bold text-gray-800">My Attendance & Calendar</h2>
+        <div className="flex gap-2">
+          {!attendanceMarked ? (
+            <button
+              onClick={handleMarkMyAttendance}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold"
+            >
+              Check In
+            </button>
+          ) : (
+            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
+          )}
+
+          {attendanceMarked && !checkoutMarked && (
+            <button
+              onClick={handleMyCheckout}
+              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold"
+            >
+              Check Out
+            </button>
+          )}
+          {checkoutMarked && (
+            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <p className="mb-4 text-sm text-gray-600">
+          View-only for Holidays.
+        </p>
+        <CalendarView
+          attendance={myAttendanceRecords} // Show MY attendance, not team's
+          holidays={holidays}
+          role="manager"
+          onDateClick={() => { }} // Managers can't edit holidays
+        />
       </div>
     </div>
   );
@@ -589,61 +727,64 @@ function ManagerDashboard() {
         <nav className="flex-1 py-4 space-y-1">
           <button
             onClick={() => setActiveTab(TABS.DASHBOARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.DASHBOARD
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Dashboard
           </button>
           <button
             onClick={() => setActiveTab(TABS.ATTENDANCE)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.ATTENDANCE
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.ATTENDANCE
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Team Attendance
           </button>
           <button
             onClick={() => setActiveTab(TABS.WORK_HOURS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.WORK_HOURS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.WORK_HOURS
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Work Hours
           </button>
           <button
             onClick={() => setActiveTab(TABS.LEAVES)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.LEAVES
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVES
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Leave Requests
           </button>
           <button
+            onClick={() => setActiveTab(TABS.CALENDAR)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Calendar & Attendance
+          </button>
+          <button
             onClick={() => setActiveTab(TABS.REPORTS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.REPORTS
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Team Reports
           </button>
           <button
             onClick={() => setActiveTab(TABS.PROFILE)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${
-              activeTab === TABS.PROFILE
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.PROFILE
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
           >
             Profile
           </button>
@@ -691,6 +832,7 @@ function ManagerDashboard() {
           {activeTab === TABS.ATTENDANCE && renderAttendance()}
           {activeTab === TABS.WORK_HOURS && renderWorkHours()}
           {activeTab === TABS.LEAVES && renderLeaves()}
+          {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.PROFILE && renderProfile()}
         </main>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -12,12 +12,12 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   LineChart,
   Line,
 } from 'recharts';
+import CalendarView from '../components/CalendarView';
+import EmployeeReports from '../components/EmployeeReports';
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -27,6 +27,7 @@ const TABS = {
   LEAVE_APPLICATIONS: 'leaveApplications',
   REPORTS: 'reports',
   AUDIT_LOGS: 'auditLogs',
+  CALENDAR: 'calendar',
   SETTINGS: 'settings',
 };
 
@@ -48,6 +49,7 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
   const [users, setUsers] = useState([]);
   const [leaveApplications, setLeaveApplications] = useState([]);
+  const [holidays, setHolidays] = useState([]); // [NEW] Holidays state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -76,6 +78,7 @@ function AdminDashboard() {
   // Tab-specific error and success messages
   const [tabErrors, setTabErrors] = useState({});
   const [tabSuccess, setTabSuccess] = useState({});
+  const [reportData, setReportData] = useState({ attendance: [], leaves: [] });
   const [processingLeaveId, setProcessingLeaveId] = useState(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -91,9 +94,14 @@ function AdminDashboard() {
     joined_on: '',
     address: '',
     contact_number: '',
+    dob: '',
+    gender: '',
+    blood_group: '',
+    nationality: '',
+    emergency_contact: '',
   });
 
-  // ✅ Settings state moved to top-level (not inside renderSettings)
+  // âœ… Settings state moved to top-level (not inside renderSettings)
   const [profileInfo, setProfileInfo] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -129,7 +137,6 @@ function AdminDashboard() {
     plannedLeave: 0,
     casualLeave: 0,
     sickLeave: 0,
-    emergencyLeave: 0,
     year: new Date().getFullYear(),
   });
   const [selectedLeave, setSelectedLeave] = useState(null);
@@ -147,9 +154,6 @@ function AdminDashboard() {
     },
     workHours: {
       maxWorkHoursPerDay: 9,
-      overtimeRateMultiplier: 1.5,
-      allowOvertimeSubmission: true,
-      requireReasonForOvertime: true,
     },
     leavePolicy: {
       annualLeave: 20,
@@ -232,11 +236,61 @@ function AdminDashboard() {
       fetchLeaveApplications(),
       fetchSettings(),
       fetchDashboardSummary(),
-      fetchNotes()
+      fetchNotes(),
+      fetchHolidays() // [NEW]
     ]).finally(() => {
       setLoading(false);
     });
   }, [user, navigate]);
+
+  // ... (existing code)
+
+  const fetchHolidays = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/holidays`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHolidays(response.data.holidays || []);
+    } catch (err) {
+      console.error('Error fetching holidays:', err);
+    }
+  };
+
+  const handleToggleHoliday = async (dateStr, isHoliday) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (isHoliday) {
+        // Find holiday with local date comparison
+        const holiday = holidays.find(h => {
+          let hDate = h.date;
+          if (typeof h.date === 'string') {
+            const d = new Date(h.date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            hDate = `${year}-${month}-${day}`;
+          }
+          return hDate === dateStr;
+        });
+
+        if (holiday && window.confirm(`Delete holiday "${holiday.name}"?`)) {
+          await axios.delete(`${API_BASE_URL}/holidays/${holiday.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } else {
+        const name = prompt('Enter holiday name:');
+        if (!name) return;
+        await axios.post(`${API_BASE_URL}/holidays`, { date: dateStr, name }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      fetchHolidays();
+    } catch (err) {
+      alert('Failed to update holiday: ' + (err.response?.data?.error || err.message));
+    }
+  };
 
   useEffect(() => {
     if (activeTab === TABS.AUDIT_LOGS) {
@@ -245,7 +299,30 @@ function AdminDashboard() {
     if (activeTab === TABS.LEAVE_APPLICATIONS) {
       fetchLeaveStatistics();
     }
+    if (activeTab === TABS.REPORTS) {
+      fetchReportData();
+    }
   }, [activeTab]);
+
+  const fetchReportData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const [attRes, leaveRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/admin/export/attendance`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_BASE_URL}/admin/export/leaves`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      console.log('Reports Data:', { attendance: attRes.data, leaves: leaveRes.data });
+      setReportData({
+        attendance: attRes.data,
+        leaves: leaveRes.data
+      });
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleBackLogout = () => {
@@ -343,7 +420,6 @@ function AdminDashboard() {
         plannedLeave: 0,
         casualLeave: 0,
         sickLeave: 0,
-        emergencyLeave: 0,
         year: new Date().getFullYear(),
       });
     } catch (err) {
@@ -604,6 +680,11 @@ function AdminDashboard() {
       joined_on: '',
       address: '',
       status: 'active',
+      dob: '',
+      gender: '',
+      blood_group: '',
+      nationality: '',
+      emergency_contact: '',
     });
     setSelectedEmployee(null);
   };
@@ -630,6 +711,11 @@ function AdminDashboard() {
             joined_on: formData.joined_on || null,
             address: formData.address || null,
             status: formData.status || 'active',
+            dob: formData.dob || null,
+            gender: formData.gender || null,
+            blood_group: formData.blood_group || null,
+            nationality: formData.nationality || null,
+            emergency_contact: formData.emergency_contact || null,
           },
           {
             headers: {
@@ -777,7 +863,7 @@ function AdminDashboard() {
         </div>
 
         <div className="rounded-xl p-5 shadow-sm bg-[#B3E5FC]/60 border border-[#B3E5FC]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Today’s Leaves</div>
+          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Today's Leaves</div>
           <div className="mt-2 text-3xl font-bold text-gray-800">{leavesTodayCount}</div>
         </div>
 
@@ -915,6 +1001,7 @@ function AdminDashboard() {
   );
 
   const handleEditClick = (employee) => {
+    console.log('Editing employee:', employee);
     setSelectedEmployee(employee);
     setShowAddForm(true);
     setTabErrors(prev => {
@@ -939,6 +1026,11 @@ function AdminDashboard() {
       joined_on: employee.joined_on ? employee.joined_on.substring(0, 10) : '',
       address: employee.address || '',
       status: employee.status || 'active',
+      dob: employee.dob ? employee.dob.substring(0, 10) : '',
+      gender: employee.gender || '',
+      blood_group: employee.blood_group || '',
+      nationality: employee.nationality || '',
+      emergency_contact: employee.emergency_contact || '',
     });
   };
 
@@ -1137,6 +1229,72 @@ function AdminDashboard() {
                     onClick={(e) => e.target.showPicker && e.target.showPicker()}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.dob}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    onKeyDown={(e) => e.preventDefault()}
+                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Gender</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Blood Group</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.blood_group}
+                    onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
+                  >
+                    <option value="">Select Blood Group</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Nationality</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.nationality}
+                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Emergency Contact</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.emergency_contact}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, emergency_contact: value });
+                    }}
+                    maxLength={15}
+                  />
+                </div>
                 <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700">Address</label>
                   <textarea
@@ -1271,13 +1429,22 @@ function AdminDashboard() {
   const renderLeaveApplications = () => {
     // Sort by leave type
     const sortedLeaves = [...leaveApplications].sort((a, b) => {
-      const typeOrder = { 'paid': 1, 'casual': 2, 'sick': 3, 'emergency': 4 };
+      const typeOrder = { 'planned': 1, 'casual': 2, 'sick': 3 };
       return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
     });
 
     const handleLeaveRowClick = (leave) => {
       setSelectedLeave(leave);
       setShowLeaveModal(true);
+    };
+
+    const calculateDays = (start, end) => {
+      if (!start || !end) return 0;
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (endDate < startDate) return 0;
+      const diffTime = Math.abs(endDate - startDate);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     };
 
     return (
@@ -1301,7 +1468,7 @@ function AdminDashboard() {
           <h3 className="text-lg font-semibold mb-4 text-gray-900">
             Total Number of Leaves for {leaveStatistics.year}
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="text-sm text-blue-600 font-medium">Planned Leave</div>
               <div className="text-2xl font-bold text-blue-800 mt-1">{leaveStatistics.plannedLeave}</div>
@@ -1313,10 +1480,6 @@ function AdminDashboard() {
             <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
               <div className="text-sm text-orange-600 font-medium">Sick Leave</div>
               <div className="text-2xl font-bold text-orange-800 mt-1">{leaveStatistics.sickLeave}</div>
-            </div>
-            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-              <div className="text-sm text-red-600 font-medium">Emergency Leave</div>
-              <div className="text-2xl font-bold text-red-800 mt-1">{leaveStatistics.emergencyLeave}</div>
             </div>
           </div>
         </div>
@@ -1334,6 +1497,9 @@ function AdminDashboard() {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Period
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Days
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Reason
@@ -1360,7 +1526,10 @@ function AdminDashboard() {
                       {la.type === 'paid' ? 'Planned' : la.type}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {la.start_date} → {la.end_date}
+                      {la.start_date ? la.start_date.substring(0, 10) : ''} â†’ {la.end_date ? la.end_date.substring(0, 10) : ''}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                      {la.days || calculateDays(la.start_date, la.end_date)}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">
                       {la.reason || '-'}
@@ -1371,7 +1540,9 @@ function AdminDashboard() {
                           ? 'bg-green-100 text-green-800'
                           : la.status === 'rejected'
                             ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            : la.status === 'cancelled'
+                              ? 'bg-gray-100 text-gray-500'
+                              : 'bg-yellow-100 text-yellow-800'
                           }`}
                       >
                         {la.status}
@@ -1381,8 +1552,8 @@ function AdminDashboard() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleApproveLeave(la.id)}
-                          disabled={la.status === 'approved' || processingLeaveId === la.id}
-                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${la.status === 'approved' || processingLeaveId === la.id
+                          disabled={la.status === 'approved' || la.status === 'cancelled' || processingLeaveId === la.id}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${la.status === 'approved' || la.status === 'cancelled' || processingLeaveId === la.id
                             ? 'bg-green-400 cursor-not-allowed'
                             : 'bg-green-600 hover:bg-green-700'
                             }`}
@@ -1391,8 +1562,8 @@ function AdminDashboard() {
                         </button>
                         <button
                           onClick={() => handleRejectLeave(la.id)}
-                          disabled={la.status === 'rejected' || processingLeaveId === la.id}
-                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${la.status === 'rejected' || processingLeaveId === la.id
+                          disabled={la.status === 'rejected' || la.status === 'cancelled' || processingLeaveId === la.id}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${la.status === 'rejected' || la.status === 'cancelled' || processingLeaveId === la.id
                             ? 'bg-red-400 cursor-not-allowed'
                             : 'bg-red-600 hover:bg-red-700'
                             }`}
@@ -1407,7 +1578,7 @@ function AdminDashboard() {
                   <tr>
                     <td
                       className="px-4 py-4 text-center text-sm text-gray-500"
-                      colSpan={6}
+                      colSpan={7}
                     >
                       No leave applications to display yet.
                     </td>
@@ -1453,13 +1624,30 @@ function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.start_date}</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.start_date ? selectedLeave.start_date.substring(0, 10) : ''}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">End Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.end_date}</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.end_date ? selectedLeave.end_date.substring(0, 10) : ''}</p>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Duration</label>
+                    <p className="mt-1 text-sm text-gray-900 font-bold">{selectedLeave.days || calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days</p>
+                  </div>
+                  {selectedLeave.document_url && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Attached Document</label>
+                      <a
+                        href={`${API_BASE_URL.replace('/api', '')}/${selectedLeave.document_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 block text-sm text-indigo-600 hover:text-indigo-800 underline"
+                      >
+                        View Document
+                      </a>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Reason</label>
                     <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{selectedLeave.reason || 'No reason provided'}</p>
@@ -1471,7 +1659,9 @@ function AdminDashboard() {
                         ? 'bg-green-100 text-green-800'
                         : selectedLeave.status === 'rejected'
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : selectedLeave.status === 'cancelled'
+                            ? 'bg-gray-100 text-gray-500'
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}
                     >
                       {selectedLeave.status}
@@ -1549,7 +1739,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  Time {auditSortBy === 'time' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  Time {auditSortBy === 'time' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -1562,7 +1752,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  User {auditSortBy === 'user' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  User {auditSortBy === 'user' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -1575,7 +1765,7 @@ function AdminDashboard() {
                     }
                   }}
                 >
-                  Activity {auditSortBy === 'activity' && (auditSortOrder === 'asc' ? '↑' : '↓')}
+                  Activity {auditSortBy === 'activity' && (auditSortOrder === 'asc' ? 'â†‘' : 'â†“')}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Metadata
@@ -1686,189 +1876,32 @@ function AdminDashboard() {
     </div>
   );
 
-  const renderReports = () => {
-    // employees by role (re-calculated for completeness, or use API data if available, but for now using local state derived from existing users list if needed, OR just using the fetched roleReport if we rely on that. The user asked for "Employees by Role chart", existing one uses `users` state. I'll stick to `roleData` derived from `users` as it works, but add the Export button).
-    // Actually, `roleReport` fetched from API is better if pagination is involved in `users`. But `users` usually contains all for small orgs.
-    // Let's us `roleData` as defined currently for the Chart, and `downloadCSV` on it.
+  const renderReports = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Organization Reports</h2>
+      <EmployeeReports
+        attendanceData={reportData.attendance}
+        leaveData={reportData.leaves}
+        employees={users}
+      />
+    </div>
+  );
 
-    // Recalculate for local usage
-    const employeeCount = users.filter((u) => u.role === 'employee').length;
-    const managerCount = totalManagers;
-    const hrCount = totalHr;
-    const adminCount = totalAdmins;
-
-    const roleData = [
-      { name: 'Employee', value: employeeCount },
-      { name: 'Manager', value: managerCount },
-      { name: 'HR', value: hrCount },
-      { name: 'Admin', value: adminCount },
-    ].filter((item) => item.value > 0);
-
-    const PIE_COLORS = ['#3b82f6', '#22c55e', '#eab308', '#ef4444'];
-
-    return (
-      <div className="space-y-8">
-        <h2 className="text-2xl font-bold text-gray-900">Reports Dashboard</h2>
-
-        {/* Attendance Report Section */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h3 className="text-lg font-semibold text-gray-800">Attendance Report</h3>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={attendanceFilter.startDate}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, startDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={attendanceFilter.endDate}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, endDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Department</label>
-                <input
-                  type="text"
-                  placeholder="All Depts"
-                  value={attendanceFilter.department}
-                  onChange={(e) => setAttendanceFilter({ ...attendanceFilter, department: e.target.value })}
-                  className="border border-gray-300 rounded w-24 px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <button
-                onClick={() => fetchDetailedReports()}
-                className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => downloadCSV(attendanceReport, 'attendance_report.csv')}
-                className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-              >
-                Export to Excel
-              </button>
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={attendanceReport} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="present" fill="#22c55e" name="Present" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="absent" fill="#ef4444" name="Absent" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="late" fill="#f97316" name="Late" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="half_day" fill="#eab308" name="Half Day" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Leave Summary Report Section */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h3 className="text-lg font-semibold text-gray-800">Leave Summary</h3>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={leaveFilter.startDate}
-                  onChange={(e) => setLeaveFilter({ ...leaveFilter, startDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={leaveFilter.endDate}
-                  onChange={(e) => setLeaveFilter({ ...leaveFilter, endDate: e.target.value })}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              <button
-                onClick={() => fetchDetailedReports()}
-                className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => downloadCSV(leaveReportData, 'leave_report.csv')}
-                className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-              >
-                Export to Excel
-              </button>
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leaveReportData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend />
-                <Bar dataKey="sick" stackId="a" fill="#ef4444" name="Sick" radius={[0, 0, 4, 4]} />
-                <Bar dataKey="casual" stackId="a" fill="#22c55e" name="Casual" />
-                <Bar dataKey="planned" stackId="a" fill="#3b82f6" name="Planned" />
-                <Bar dataKey="other" stackId="a" fill="#a855f7" name="Other" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Employees by Role Chart */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Employees by Role</h3>
-            <button
-              onClick={() => downloadCSV(roleData, 'employees_role_report.csv')}
-              className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition flex items-center gap-1"
-            >
-              Export to Excel
-            </button>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={roleData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {roleData.map((entry, index) => (
-                    <Cell key={`role-cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+  const renderCalendar = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">Calendar & Holidays</h2>
       </div>
-    );
-  };
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <p className="mb-4 text-sm text-gray-600">Click on any date to mark/unmark a holiday.</p>
+        <CalendarView
+          holidays={holidays}
+          role="admin"
+          onDateClick={handleToggleHoliday}
+        />
+      </div>
+    </div>
+  );
 
   const renderSettings = () => {
     const renderAccountSettings = () => (
@@ -2265,6 +2298,8 @@ function AdminDashboard() {
     );
   };
 
+
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -2307,6 +2342,15 @@ function AdminDashboard() {
               }`}
           >
             Leave Applications
+          </button>
+          <button
+            onClick={() => setActiveTab(TABS.CALENDAR)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Calendar & Holidays
           </button>
           <button
             onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
@@ -2355,6 +2399,7 @@ function AdminDashboard() {
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
+              {activeTab === TABS.CALENDAR && 'Calendar & Holidays'}
               {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
               {activeTab === TABS.REPORTS && 'Reports'}
               {activeTab === TABS.SETTINGS && 'Settings'}
@@ -2370,6 +2415,7 @@ function AdminDashboard() {
           {activeTab === TABS.DASHBOARD && renderDashboard()}
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+          {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.SETTINGS && renderSettings()}

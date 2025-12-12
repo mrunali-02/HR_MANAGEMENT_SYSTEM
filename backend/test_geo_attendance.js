@@ -10,6 +10,7 @@ const API_Base = 'http://localhost:3001/api';
 // Default office (Bangalore)
 const OFFICE_LAT = 19.108139;
 const OFFICE_LNG = 73.019611;
+const MAX_DISTANCE = 1000; // meters
 
 async function testGeo() {
     let mockUser = null;

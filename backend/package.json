@@ -10,20 +10,25 @@
     "migrate": "node src/migrations/migrate.js",
     "setup-db": "node scripts/setup-database.js"
   },
-  "keywords": ["hr", "management", "api"],
+  "keywords": [
+    "hr",
+    "management",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "mysql2": "^3.6.5",
     "bcrypt": "^5.1.1",
-    "uuid": "^9.0.1",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "cors": "^2.8.5"
+    "multer": "^2.0.2",
+    "mysql2": "^3.6.5",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
 }
-

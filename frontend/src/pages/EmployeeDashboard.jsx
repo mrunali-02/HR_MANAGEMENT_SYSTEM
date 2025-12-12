@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import './EmployeeDashboard.css';
+import CalendarView from '../components/CalendarView';
+import EmployeeReports from '../components/EmployeeReports';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -30,16 +32,17 @@ function EmployeeDashboard() {
     sick: 0,
     casual: 0,
     paid: 0,
-    emergency: 0
   });
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [leaveForm, setLeaveForm] = useState({
     type: 'sick',
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    document: null
   });
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [holidays, setHolidays] = useState([]); // [NEW]
 
   // Notifications
   const [notifications, setNotifications] = useState([]);
@@ -47,10 +50,26 @@ function EmployeeDashboard() {
   // Settings form
   const [settingsForm, setSettingsForm] = useState({
     name: '',
+    email: '',
+    role: '',
+    department: '',
+    joined_on: '',
+    dob: '',
+    gender: '',
+    blood_group: '',
     display_name: '',
-    bio: ''
+    bio: '',
+    phone: '',
+    address: '',
+    emergency_contact: ''
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -88,10 +107,23 @@ function EmployeeDashboard() {
       // 1) Profile
       const profileRes = await axios.get(`${API_BASE_URL}/employee/${id}`, { headers });
       setProfile(profileRes.data);
+      const u = profileRes.data?.user || {};
+      const p = profileRes.data?.profile || {};
+
       setSettingsForm({
-        name: profileRes.data?.user?.name || '',
-        display_name: profileRes.data?.profile?.display_name || '',
-        bio: profileRes.data?.profile?.bio || ''
+        name: u.name || '',
+        email: u.email || '',
+        role: u.role || '',
+        department: u.department || '',
+        joined_on: u.created_at ? u.created_at.split('T')[0] : '',
+        dob: u.dob ? u.dob.split('T')[0] : '',
+        gender: u.gender || '',
+        blood_group: u.blood_group || '',
+        display_name: p.display_name || u.name || '',
+        bio: p.bio || '',
+        phone: u.phone || '',
+        address: u.address || '',
+        emergency_contact: u.emergency_contact || ''
       });
 
       // 2) Attendance
@@ -131,6 +163,14 @@ function EmployeeDashboard() {
         setNotifications(notifRes.data.notifications || notifRes.data || []);
       } catch (err) {
         console.error('Error fetching notifications:', err);
+      }
+
+      // 5) Holidays [NEW]
+      try {
+        const holidayRes = await axios.get(`${API_BASE_URL}/holidays`, { headers });
+        setHolidays(holidayRes.data.holidays || []);
+      } catch (err) {
+        console.error('Error fetching holidays', err);
       }
 
     } catch (error) {
@@ -236,6 +276,7 @@ function EmployeeDashboard() {
   };
 
   const handleCheckout = async () => {
+    // ... (existing code)
     // Only allow if checked in but not checked out
     if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) {
       return;
@@ -255,7 +296,7 @@ function EmployeeDashboard() {
       if (activeTab === 'attendance') {
         const hours = response.data.total_hours || '0';
         const overtime = response.data.overtime_hours || '0';
-        setSuccess(`Checkout marked successfully! Worked ${hours} hours${parseFloat(overtime) > 0 ? ` (${overtime} hrs overtime)` : ''}`);
+        setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
         setTimeout(() => setSuccess(''), 5000);
       }
 
@@ -275,7 +316,79 @@ function EmployeeDashboard() {
     }
   };
 
+  const handleCancelLeave = async (leaveId) => {
+    if (!window.confirm('Are you sure you want to cancel this leave request?')) return;
+
+    setError('');
+    setSuccess('');
+    const token = localStorage.getItem('token');
+
+    try {
+      await axios.put(`${API_BASE_URL}/employee/${id}/leaves/${leaveId}/cancel`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setSuccess('Leave request cancelled.');
+      // Refresh list
+      const leavesRes = await axios.get(`${API_BASE_URL}/employee/${id}/leaves`, { headers: { Authorization: `Bearer ${token}` } });
+      setLeaveHistory(leavesRes.data.leaves || leavesRes.data || []);
+
+    } catch (err) {
+      console.error('Error cancelling leave:', err);
+      setError(err.response?.data?.error || 'Failed to cancel leave');
+    }
+  };
+
+  const calculateLeaveDays = (start, end) => {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (endDate < startDate) return 0;
+
+    let count = 0;
+    let cur = new Date(startDate);
+    while (cur <= endDate) {
+      const year = cur.getFullYear();
+      const month = String(cur.getMonth() + 1).padStart(2, '0');
+      const day = String(cur.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      const isHoliday = holidays.some(h => {
+        let hDate = h.date;
+        if (typeof h.date === 'string') {
+          const d = new Date(h.date);
+          const hYear = d.getFullYear();
+          const hMonth = String(d.getMonth() + 1).padStart(2, '0');
+          const hDay = String(d.getDate()).padStart(2, '0');
+          hDate = `${hYear}-${hMonth}-${hDay}`;
+        }
+        return hDate === dateStr;
+      });
+
+      if (!isHoliday) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  };
+
   const handleLeaveFormChange = (field, value) => {
+    if (field === 'startDate' || field === 'endDate') {
+      const isHoliday = holidays.some(h => {
+        let hDate = h.date;
+        if (typeof h.date === 'string') {
+          const d = new Date(h.date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          hDate = `${year}-${month}-${day}`;
+        }
+        return hDate === value;
+      });
+      if (isHoliday) {
+        alert('Selected date is a holiday marked by HR/Admin.');
+        return;
+      }
+    }
     setLeaveForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -299,22 +412,31 @@ function EmployeeDashboard() {
     setLeaveSubmitting(true);
     try {
       const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('type', leaveForm.type);
+      formData.append('start_date', leaveForm.startDate);
+      formData.append('end_date', leaveForm.endDate);
+      formData.append('reason', leaveForm.reason);
+      if (leaveForm.document) {
+        formData.append('document', leaveForm.document);
+      }
+
       await axios.post(
         `${API_BASE_URL}/employee/${id}/leaves`,
+        formData,
         {
-          type: leaveForm.type,
-          start_date: leaveForm.startDate,
-          end_date: leaveForm.endDate,
-          reason: leaveForm.reason
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
       );
       // Only set success if we're on the leaves tab
       if (activeTab === 'leaves') {
         setSuccess('Leave applied successfully!');
         setTimeout(() => setSuccess(''), 3000);
       }
-      setLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '' });
+      setLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '', document: null });
 
       // refresh leave history + balance
       const headers = { Authorization: `Bearer ${token}` };
@@ -341,13 +463,6 @@ function EmployeeDashboard() {
     }
   };
 
-  const handleEmergencyLeave = () => {
-    setLeaveForm((prev) => ({
-      ...prev,
-      type: 'emergency'
-    }));
-    setActiveTab('leaves');
-  };
 
   const handleSettingsChange = (field, value) => {
     setSettingsForm((prev) => ({ ...prev, [field]: value }));
@@ -366,7 +481,10 @@ function EmployeeDashboard() {
         {
           name: settingsForm.name,
           display_name: settingsForm.display_name,
-          bio: settingsForm.bio
+          bio: settingsForm.bio,
+          phone: settingsForm.phone,
+          address: settingsForm.address,
+          emergency_contact: settingsForm.emergency_contact
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -374,7 +492,13 @@ function EmployeeDashboard() {
       // Update local profile state
       setProfile((prev) => ({
         ...prev,
-        user: { ...prev.user, name: settingsForm.name },
+        user: {
+          ...prev.user,
+          name: settingsForm.name,
+          phone: settingsForm.phone,
+          address: settingsForm.address,
+          emergency_contact: settingsForm.emergency_contact
+        },
         profile: {
           ...(prev.profile || {}),
           display_name: settingsForm.display_name,
@@ -386,6 +510,44 @@ function EmployeeDashboard() {
       setError(err.response?.data?.error || 'Failed to save settings');
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = (field, value) => {
+    setPasswordForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+    if (!passwordForm.currentPassword) {
+      setError('Current password is required');
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_BASE_URL}/employee/${id}/change-password`,
+        {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSuccess('Password changed successfully');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -427,6 +589,15 @@ function EmployeeDashboard() {
             Attendance
           </button>
           <button
+            onClick={() => setActiveTab('calendar')}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'calendar'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Calendar
+          </button>
+          <button
             onClick={() => setActiveTab('leaves')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'leaves'
               ? 'bg-slate-800 text-white'
@@ -434,6 +605,15 @@ function EmployeeDashboard() {
               }`}
           >
             Leaves
+          </button>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'reports'
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Reports
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -464,7 +644,8 @@ function EmployeeDashboard() {
             <h1 className="text-xl font-semibold text-gray-900">
               {activeTab === 'dashboard' ? 'Overview' :
                 activeTab === 'attendance' ? 'Attendance History' :
-                  activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
+                  activeTab === 'calendar' ? 'Calendar' :
+                    activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
             </h1>
             <p className="text-xs text-gray-500">
               Welcome back, {profile?.user?.name || 'Employee'}
@@ -762,17 +943,25 @@ function EmployeeDashboard() {
             </div>
           )}
 
+          {/* CALENDAR TAB [NEW] */}
+          {activeTab === 'calendar' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Calendar</h2>
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <CalendarView
+                  attendance={attendanceRecords}
+                  holidays={holidays}
+                  role="employee"
+                />
+              </div>
+            </div>
+          )}
+
           {/* LEAVES TAB */}
           {activeTab === 'leaves' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">Leave Management</h2>
-                <button
-                  onClick={handleEmergencyLeave}
-                  className="bg-red-600 text-white px-4 py-2 rounded shadow-sm hover:bg-red-700 text-sm font-bold uppercase tracking-wider"
-                >
-                  Emergency Leave
-                </button>
               </div>
 
               {/* Apply Leave Form */}
@@ -783,14 +972,21 @@ function EmployeeDashboard() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Leave Type</label>
                     <select
                       value={leaveForm.type}
-                      onChange={(e) => handleLeaveFormChange('type', e.target.value)}
+                      onChange={(e) => {
+                        const newType = e.target.value;
+                        setLeaveForm(prev => ({
+                          ...prev,
+                          type: newType,
+                          document: newType !== 'sick' ? null : prev.document
+                        }));
+                      }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="sick">Sick Leave</option>
                       <option value="casual">Casual Leave</option>
                       <option value="paid">Planned Leave</option>
-                      <option value="emergency">Emergency Leave</option>
                     </select>
+
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -800,6 +996,7 @@ function EmployeeDashboard() {
                         type="date"
                         value={leaveForm.startDate}
                         onChange={(e) => handleLeaveFormChange('startDate', e.target.value)}
+                        onKeyDown={(e) => e.preventDefault()}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
@@ -807,11 +1004,32 @@ function EmployeeDashboard() {
                       <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
                       <input
                         type="date"
+                        min={leaveForm.startDate}
                         value={leaveForm.endDate}
                         onChange={(e) => handleLeaveFormChange('endDate', e.target.value)}
+                        onKeyDown={(e) => e.preventDefault()}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
+                  </div>
+
+                  {leaveForm.startDate && leaveForm.endDate && (
+                    <div className="col-span-1 md:col-span-2 text-sm text-indigo-600 font-medium">
+                      Total Leave Days: {calculateLeaveDays(leaveForm.startDate, leaveForm.endDate)}
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Upload Document {leaveForm.type !== 'sick' && '(Only for Sick Leave)'}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      disabled={leaveForm.type !== 'sick'}
+                      onChange={(e) => handleLeaveFormChange('document', e.target.files[0])}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
                   </div>
 
                   <div className="md:col-span-2">
@@ -845,9 +1063,12 @@ function EmployeeDashboard() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -861,19 +1082,45 @@ function EmployeeDashboard() {
                       {leaveHistory.map((l) => (
                         <tr key={l.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">{l.type}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {l.start_date} → {l.end_date}
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{l.start_date}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{l.end_date}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                            {l.days || calculateLeaveDays(l.start_date, l.end_date)}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-500 truncate max-w-xs">{l.reason}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            <div className="max-w-xs truncate" title={l.reason}>{l.reason}</div>
+                            {l.document_url && (
+                              <a
+                                href={`${API_BASE_URL.replace('/api', '')}/${l.document_url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block mt-1 text-xs text-indigo-600 hover:text-indigo-800 underline"
+                              >
+                                View Doc
+                              </a>
+                            )}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${l.status === 'approved'
                               ? 'bg-green-100 text-green-800'
                               : l.status === 'rejected'
                                 ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                : l.status === 'cancelled'
+                                  ? 'bg-gray-100 text-gray-500'
+                                  : 'bg-yellow-100 text-yellow-800'
                               }`}>
                               {l.status}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                            {l.status === 'pending' && (
+                              <button
+                                onClick={() => handleCancelLeave(l.id)}
+                                className="text-red-600 hover:text-red-900 border border-red-200 px-3 py-1 rounded hover:bg-red-50 bg-white"
+                              >
+                                Cancel
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -884,72 +1131,168 @@ function EmployeeDashboard() {
             </div>
           )}
 
-          {/* SETTINGS TAB */}
-          {activeTab === 'settings' && (
-            <div className="space-y-6 max-w-2xl mx-auto">
-              <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
-
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <form onSubmit={handleSaveSettings} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      value={profile?.user?.email || ''}
-                      disabled
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
-                    <input
-                      type="text"
-                      value={settingsForm.name}
-                      onChange={(e) => handleSettingsChange('name', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Your full name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Display Name</label>
-                    <input
-                      type="text"
-                      value={settingsForm.display_name}
-                      onChange={(e) => handleSettingsChange('display_name', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Preferred display name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Bio</label>
-                    <textarea
-                      rows="4"
-                      value={settingsForm.bio}
-                      onChange={(e) => handleSettingsChange('bio', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Tell us a bit about yourself..."
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <button
-                      type="submit"
-                      disabled={settingsSaving}
-                      className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
-                    >
-                      {settingsSaving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+          {/* REPORTS TAB */}
+          {activeTab === 'reports' && (
+            <div className="space-y-8 max-w-6xl mx-auto pb-10">
+              <h2 className="text-2xl font-bold text-gray-900">Reports</h2>
+              <EmployeeReports attendanceData={attendanceRecords} leaveData={leaveHistory} />
             </div>
           )}
-        </main>
-      </div>
-    </div>
+
+          {/* SETTINGS TAB */}
+          {
+            activeTab === 'settings' && (
+              <div className="space-y-8 max-w-4xl mx-auto pb-10">
+                <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
+
+                {/* Section 1: Personal Details (Read Only) */}
+                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Personal Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[
+                      { label: 'Full Name', value: settingsForm.name },
+                      { label: 'Email', value: settingsForm.email },
+                      { label: 'Role', value: settingsForm.role },
+                      { label: 'Department', value: settingsForm.department },
+                      { label: 'Date of Joining', value: settingsForm.joined_on },
+                      { label: 'Date of Birth', value: settingsForm.dob },
+                      { label: 'Gender', value: settingsForm.gender },
+                      { label: 'Blood Group', value: settingsForm.blood_group }
+                    ].map((field) => (
+                      <div key={field.label}>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{field.label}</label>
+                        <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">
+                          {field.value || '-'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 2: Contact & Preferences (Editable) */}
+                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Contact & Preferences</h3>
+                  <form onSubmit={handleSaveSettings} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          value={settingsForm.phone}
+                          onChange={(e) => handleSettingsChange('phone', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Emergency Contact</label>
+                        <input
+                          type="text"
+                          value={settingsForm.emergency_contact}
+                          onChange={(e) => handleSettingsChange('emergency_contact', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                          placeholder="Emergency contact info"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
+                      <textarea
+                        rows="2"
+                        value={settingsForm.address}
+                        onChange={(e) => handleSettingsChange('address', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                        placeholder="Your residential address"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+                        <input
+                          type="text"
+                          value={settingsForm.display_name}
+                          onChange={(e) => handleSettingsChange('display_name', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                          placeholder="Preferred display name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Bio</label>
+                        <textarea
+                          rows="1"
+                          value={settingsForm.bio}
+                          onChange={(e) => handleSettingsChange('bio', e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                          placeholder="Brief bio"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={settingsSaving}
+                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
+                      >
+                        {settingsSaving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Section 3: Security */}
+                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Security</h3>
+                  <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-lg">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Current Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.currentPassword}
+                        onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Enter current password"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">New Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.newPassword}
+                        onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Enter new password"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.confirmPassword}
+                        onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={passwordSaving}
+                        className="bg-gray-800 text-white px-6 py-2 rounded-lg shadow-md hover:bg-gray-900 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
+                      >
+                        {passwordSaving ? 'Updating...' : 'Update Password'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )
+          }
+        </main >
+      </div >
+    </div >
   );
 }
 
