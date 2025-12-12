@@ -21,6 +21,8 @@ export async function getDashboardSummary(req, res) {
         (SELECT COUNT(*) FROM employees) AS totalEmployees,
         (SELECT COUNT(*) FROM employees WHERE status = 'active') AS activeEmployees,
         (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS pendingLeaveRequests,
+        (SELECT COUNT(*) FROM attendance_corrections WHERE status = 'pending') AS pendingAttendanceCorrections,
+        (SELECT COUNT(*) FROM overtimes WHERE status = 'pending') AS pendingOvertimeRequests,
         (SELECT COUNT(*) FROM employees WHERE role='manager') AS totalManagers,
         (SELECT COUNT(*) FROM employees WHERE role='hr') AS totalHr,
         (SELECT COUNT(*) FROM employees WHERE role='admin') AS totalAdmins,
@@ -39,6 +41,17 @@ export async function getDashboardSummary(req, res) {
       FROM leave_requests
       WHERE status = 'approved'
         AND CURDATE() BETWEEN start_date AND end_date
+    `);
+
+    // Birthdays in next 7 days
+    const [birthdays] = await db.execute(`
+      SELECT id, name, dob, photo_url 
+      FROM employees 
+      WHERE 
+        DATE_ADD(dob, INTERVAL YEAR(CURDATE())-YEAR(dob) + IF(DAYOFYEAR(CURDATE()) > DAYOFYEAR(dob),1,0) YEAR) 
+        BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+      ORDER BY DATE_ADD(dob, INTERVAL YEAR(CURDATE())-YEAR(dob) + IF(DAYOFYEAR(CURDATE()) > DAYOFYEAR(dob),1,0) YEAR) ASC
+      LIMIT 5
     `);
 
     const [[{ managerApprovedToday = 0 }]] = await db.execute(`
@@ -63,18 +76,12 @@ export async function getDashboardSummary(req, res) {
     );
 
     const notifications = [];
-    if (managerApprovedToday > 0) {
-      notifications.push(
-        `Managers approved ${managerApprovedToday} leave${managerApprovedToday > 1 ? 's' : ''} today`
-      );
-    }
-    if (newLeaveRequestsToday > 0) {
-      notifications.push(
-        `${newLeaveRequestsToday} new leave request${newLeaveRequestsToday > 1 ? 's' : ''} received today`
-      );
-    }
+    if (counts?.pendingLeaveRequests > 0) notifications.push(`${counts.pendingLeaveRequests} leave requests pending approval`);
+    if (counts?.pendingAttendanceCorrections > 0) notifications.push(`${counts.pendingAttendanceCorrections} attendance corrections pending`);
+    if (counts?.pendingOvertimeRequests > 0) notifications.push(`${counts.pendingOvertimeRequests} overtime requests pending`);
+
     if (notifications.length === 0) {
-      notifications.push('No new notifications for today');
+      notifications.push('No actions pending');
     }
 
     res.json({
@@ -82,6 +89,8 @@ export async function getDashboardSummary(req, res) {
         totalEmployees: counts?.totalEmployees || 0,
         activeEmployees: counts?.activeEmployees || 0,
         pendingLeaveRequests: counts?.pendingLeaveRequests || 0,
+        pendingAttendanceCorrections: counts?.pendingAttendanceCorrections || 0,
+        pendingOvertimeRequests: counts?.pendingOvertimeRequests || 0,
         presentToday: presentCount || 0,
         absentToday,
         totalManagers: counts?.totalManagers || 0,
@@ -91,6 +100,7 @@ export async function getDashboardSummary(req, res) {
         leavesToday: leaveToday || 0,
       },
       notifications,
+      birthdays: birthdays || []
     });
   } catch (error) {
     console.error('Dashboard summary error:', error);

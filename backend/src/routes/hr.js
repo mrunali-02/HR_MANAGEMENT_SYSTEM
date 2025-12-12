@@ -7,7 +7,8 @@ import {
   rejectLeaveRequest,
   getHrAnalytics,
   getManagers,
-  assignManager
+  assignManager,
+  getDashboardSummary
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -26,5 +27,6 @@ router.get('/leave-requests', getLeaveRequests);
 router.put('/leave-requests/:id/approve', approveLeaveRequest);
 router.put('/leave-requests/:id/reject', rejectLeaveRequest);
 router.get('/analytics', getHrAnalytics);
+router.get('/dashboard/summary', getDashboardSummary);
 
 export default router;

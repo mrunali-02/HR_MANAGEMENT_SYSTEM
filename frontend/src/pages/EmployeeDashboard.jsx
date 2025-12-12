@@ -276,7 +276,6 @@ function EmployeeDashboard() {
   };
 
   const handleCheckout = async () => {
-    // ... (existing code)
     // Only allow if checked in but not checked out
     if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) {
       return;
@@ -284,36 +283,70 @@ function EmployeeDashboard() {
 
     setError('');
     setSuccess('');
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_BASE_URL}/employee/${id}/attendance/checkout`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
 
-      // Only set success if we're on the attendance tab
-      if (activeTab === 'attendance') {
-        const hours = response.data.total_hours || '0';
-        const overtime = response.data.overtime_hours || '0';
-        setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
-        setTimeout(() => setSuccess(''), 5000);
-      }
-
-      // Mark as checked out and refresh attendance
-      setCheckoutMarked(true);
-      const token2 = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token2}` };
-      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
-      setAttendanceRecords(attRes.data.records || []);
-      setTodayAttendance(attRes.data.today || null);
-    } catch (err) {
-      console.error('Error marking checkout:', err);
-      if (activeTab === 'attendance') {
-        setError(err.response?.data?.error || 'Failed to mark checkout');
-        setTimeout(() => setError(''), 5000);
-      }
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
+    if (!confirmCheckout) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          const response = await axios.post(
+            `${API_BASE_URL}/employee/${id}/attendance/checkout`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          // Only set success if we're on the attendance tab
+          if (activeTab === 'attendance') {
+            const hours = response.data.total_hours || '0';
+            setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
+            setTimeout(() => setSuccess(''), 5000);
+          }
+
+          // Mark as checked out and refresh attendance
+          setCheckoutMarked(true);
+          const token2 = localStorage.getItem('token');
+          const headers = { Authorization: `Bearer ${token2}` };
+          const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+          setAttendanceRecords(attRes.data.records || []);
+          setTodayAttendance(attRes.data.today || null);
+        } catch (err) {
+          console.error('Error marking checkout:', err);
+          let errorMsg = err.response?.data?.error || 'Failed to mark checkout';
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+
+          if (activeTab === 'attendance') {
+            setError(errorMsg);
+            if (success === 'Fetching location...') setSuccess('');
+            setTimeout(() => setError(''), 5000);
+          }
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+
+        if (activeTab === 'attendance') {
+          setError(msg);
+          setSuccess('');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+    );
   };
 
   const handleCancelLeave = async (leaveId) => {

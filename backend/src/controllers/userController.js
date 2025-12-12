@@ -222,7 +222,7 @@ export async function markAttendance(req, res) {
     const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '19.108273');
     const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '73.019769');
     // Default to 20,000km to effectively disable geofence for testing if not set
-    const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '20000000');
+    const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
 
     const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
     console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
@@ -716,6 +716,35 @@ export async function markCheckout(req, res) {
 
     if (!att.check_in_time) {
       return res.status(400).json({ error: 'Check-in time not found. Please mark attendance first.' });
+    }
+
+    // Geolocation Validation for Checkout
+    const { latitude, longitude, accuracy } = req.body;
+
+    // 1. Check if coords exist
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ error: 'Location data is required for check-out' });
+    }
+
+    // 2. Accuracy check (> 10000m reject)
+    if (accuracy && accuracy > 10000) {
+      return res.status(400).json({ error: 'GPS accuracy is too low. Please move to a clearer area.' });
+    }
+
+    // 3. Geofence check
+    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '19.108273');
+    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '73.019769');
+    const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
+
+    const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+    console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
+
+    if (distance > MAX_DISTANCE) {
+      return res.status(400).json({
+        error: 'You must be within the permitted attendance zone to check out.',
+        distance: Math.round(distance),
+        max_distance: MAX_DISTANCE
+      });
     }
 
     const now = new Date();

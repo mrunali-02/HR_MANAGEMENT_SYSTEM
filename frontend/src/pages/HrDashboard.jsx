@@ -42,6 +42,7 @@ function HrDashboard() {
   const [leaveApplications, setLeaveApplications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [assigningManager, setAssigningManager] = useState({});
+  const [dashboardSummary, setDashboardSummary] = useState(null);
 
   // Attendance & Calendar
   const [holidays, setHolidays] = useState([]);
@@ -64,7 +65,9 @@ function HrDashboard() {
       fetchManagers(),
       fetchLeaveApplications(),
       fetchHolidays(),
-      fetchMyAttendance()
+
+      fetchMyAttendance(),
+      fetchDashboardSummary()
     ]).finally(() => {
       setLoading(false);
     });
@@ -156,6 +159,18 @@ function HrDashboard() {
     }
   };
 
+  const fetchDashboardSummary = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/hr/dashboard/summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDashboardSummary(response.data);
+    } catch (err) {
+      console.error('Error fetching dashboard summary:', err);
+    }
+  };
+
 
 
   const handleApproveLeave = async (leaveId) => {
@@ -240,34 +255,112 @@ function HrDashboard() {
   };
 
   const handleMarkAttendance = async () => {
-    if (attendanceMarked || todayAttendance?.status === 'present') return;
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setSuccess('Checked in successfully!');
-      fetchMyAttendance();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      alert('Check-in failed');
+    if (attendanceMarked || todayAttendance?.status === 'present') {
+      return;
     }
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    if (!confirmCheckIn) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          await axios.post(
+            `${API_BASE_URL}/employee/${user.id}/attendance/mark`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          setSuccess('Attendance marked successfully!');
+          setAttendanceMarked(true);
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error('Error marking attendance:', err);
+          let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location...') setSuccess(''); // Clear loading text
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+    );
   };
 
   const handleCheckout = async () => {
     if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const hours = res.data.total_hours || '0';
-      setSuccess(`Checked out! Worked ${hours} hours.`);
-      fetchMyAttendance();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      alert('Checkout failed');
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
+    if (!confirmCheckout) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const hours = res.data.total_hours || '0';
+          setSuccess(`Checked out! Worked ${hours} hours.`);
+          setCheckoutMarked(true); // Update local state immediately
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error('Error marking checkout:', err);
+          let errorMsg = err.response?.data?.error || 'Checkout failed';
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location...') setSuccess('');
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+    );
   };
 
   const handleToggleHoliday = async (dateStr, isHoliday) => {
@@ -317,18 +410,149 @@ function HrDashboard() {
   const renderDashboard = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">HR Dashboard Overview</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
-        <div className="bg-indigo-600 text-white p-6 rounded-lg shadow">
-          <div className="text-sm opacity-80">Total Employees</div>
-          <div className="text-3xl font-bold">{totalEmployees}</div>
+
+      {/* Messages */}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        {/* New Attendance Card */}
+        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between h-full">
+          <div>
+            <div className="text-sm uppercase tracking-wide opacity-80">Today's Status</div>
+            <div className="mt-2 text-2xl font-bold">
+              {todayAttendance?.status === 'present'
+                ? 'Present'
+                : todayAttendance?.status === 'absent'
+                  ? 'Absent'
+                  : 'Not Marked'}
+            </div>
+            {todayAttendance?.check_in && (
+              <div className="mt-1 text-xs opacity-75">
+                In: {todayAttendance.check_in}
+              </div>
+            )}
+            {todayAttendance?.check_out && (
+              <div className="mt-1 text-xs opacity-75">
+                Out: {todayAttendance.check_out}
+              </div>
+            )}
+            {todayAttendance?.total_hours && (
+              <div className="mt-1 text-xs opacity-75 font-semibold">
+                Hours: {todayAttendance.total_hours}
+              </div>
+            )}
+          </div>
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={handleMarkAttendance}
+              disabled={attendanceMarked || todayAttendance?.status === 'present'}
+              className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${attendanceMarked || todayAttendance?.status === 'present'
+                ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
+                : 'bg-white text-indigo-600 hover:bg-indigo-50 shadow-md'
+                }`}
+            >
+              {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
+            </button>
+            {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
+              <button
+                onClick={handleCheckout}
+                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition"
+              >
+                Check Out
+              </button>
+            )}
+            {checkoutMarked && todayAttendance?.check_out && (
+              <button
+                disabled
+                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
+              >
+                ✓ Checked Out
+              </button>
+            )}
+          </div>
         </div>
-        <div className="bg-emerald-600 text-white p-6 rounded-lg shadow">
-          <div className="text-sm opacity-80">Managers</div>
-          <div className="text-3xl font-bold">{totalManagers}</div>
+
+        {/* Existing Stat Cards & New Widgets */}
+        <div className="bg-white p-6 rounded-lg shadow border border-indigo-100 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-indigo-200"></div>
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Total Employees</div>
+          <div className="text-4xl font-extrabold text-indigo-600 mt-2 relative z-10">{dashboardSummary?.totals?.totalEmployees || totalEmployees}</div>
         </div>
-        <div className="bg-sky-600 text-white p-6 rounded-lg shadow">
-          <div className="text-sm opacity-80">HR Staff</div>
-          <div className="text-3xl font-bold">{totalHr}</div>
+
+        <div className="bg-white p-6 rounded-lg shadow border border-green-100 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-green-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-green-200"></div>
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Present Today</div>
+          <div className="text-4xl font-extrabold text-green-600 mt-2 relative z-10">{dashboardSummary?.totals?.presentToday || 0}</div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border border-red-100 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-red-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-red-200"></div>
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Absent Today</div>
+          <div className="text-4xl font-extrabold text-red-600 mt-2 relative z-10">{dashboardSummary?.totals?.absentToday || 0}</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-6 rounded-lg shadow relative overflow-hidden">
+          <div className="text-sm font-medium opacity-90 uppercase tracking-wider">Pending Leaves</div>
+          <div className="text-4xl font-extrabold mt-2">{dashboardSummary?.totals?.pendingLeaveRequests || 0}</div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border border-orange-100 relative overflow-hidden">
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Pending Corrections</div>
+          <div className="text-3xl font-bold text-orange-600 mt-2">{dashboardSummary?.totals?.pendingAttendanceCorrections || 0}</div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow border border-purple-100 relative overflow-hidden">
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Pending Overtime</div>
+          <div className="text-3xl font-bold text-purple-600 mt-2">{dashboardSummary?.totals?.pendingOvertimeRequests || 0}</div>
+        </div>
+      </div>
+
+      {/* Row 2: Notifications & Birthdays */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Notifications Panel */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            🔔 Action Items
+          </h3>
+          <div className="space-y-3">
+            {dashboardSummary?.notifications?.length > 0 ? (
+              dashboardSummary.notifications.map((note, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shrink-0"></span>
+                  <span>{note}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 italic text-sm">No pending actions.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Birthdays Panel */}
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            🎂 Upcoming Birthdays
+          </h3>
+          <div className="space-y-4">
+            {dashboardSummary?.birthdays?.length > 0 ? (
+              dashboardSummary.birthdays.map((b) => (
+                <div key={b.id} className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 font-bold text-sm">
+                    {b.photo_url ? <img src={b.photo_url} className="h-full w-full rounded-full object-cover" /> : (b.name ? b.name.charAt(0) : 'U')}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{b.name}</p>
+                    <p className="text-xs text-gray-500">{new Date(b.dob).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 italic text-sm">No birthdays in the next 7 days.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

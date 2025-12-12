@@ -64,6 +64,7 @@ router.get('/dashboard/summary', authToken, requireRole('admin'), getDashboardSu
 // Employee Management
 router.post('/employees', authToken, requireRole('admin'), addEmployee);
 router.put('/employees/:id', authToken, requireRole('admin'), updateEmployee);
+// router.get('/users', authToken, requireRole('admin'), getUsers);
 router.get('/users', authToken, requireRole('admin'), getUsers);
 router.delete('/users/:id', authToken, requireRole('admin'), deleteUser);
 
