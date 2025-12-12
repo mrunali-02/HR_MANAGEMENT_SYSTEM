@@ -387,7 +387,7 @@ export async function deleteUser(req, res) {
 export async function getLeaveRequests(req, res) {
   try {
     const [requests] = await db.execute(`
-      SELECT lr.id, lr.user_id, REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email,
+      SELECT lr.id, lr.user_id, REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email, e.role,
       lr.type, lr.start_date, lr.end_date, lr.days, lr.document_url, lr.reason, lr.status, lr.created_at
       FROM leave_requests lr
       JOIN employees e ON lr.user_id = e.id
@@ -442,25 +442,41 @@ export async function getLeaveStatistics(req, res) {
 
 export async function approveLeaveRequest(req, res) {
   try {
-    const { id } = req.params;
-
-    // Get leave details for notification
-    const [request] = await db.execute(
-      'SELECT user_id, type, start_date, end_date FROM leave_requests WHERE id = ?',
-      [id]
+    // Check if the user whose leave is being processed is an HR
+    const [leaveRequest] = await db.execute(
+      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role FROM leave_requests lr 
+       JOIN employees e ON lr.user_id = e.id 
+       WHERE lr.id = ?`,
+      [req.params.id]
     );
 
-    await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, id]);
-
-    if (request.length > 0) {
-      const { user_id, type, start_date, end_date } = request[0];
-      await createNotification(
-        user_id,
-        `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
-      );
+    if (leaveRequest.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
     }
 
-    await logAudit(req.user.id, 'leave_approved', { leave_id: id });
+    const { user_id, type, start_date, end_date, role: requesterRole } = leaveRequest[0];
+
+    // If requester is HR (or Admin), ONLY Admin can approve
+    if (requesterRole === 'hr' || requesterRole === 'admin') {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Access denied: Only Admins can approve HR/Admin leaves' });
+      }
+    }
+
+    await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
+
+    // Send Notification
+    await createNotification(
+      user_id,
+      `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
+    );
+
+    // Log audit
+    await logAudit(req.user.id, 'leave_approved', {
+      leave_id: req.params.id,
+      applicant_role: requesterRole
+    });
+
     res.json({ message: 'Leave approved' });
   } catch (error) {
     console.error('Approve leave error:', error);
@@ -470,24 +486,40 @@ export async function approveLeaveRequest(req, res) {
 
 export async function rejectLeaveRequest(req, res) {
   try {
-    const { id } = req.params;
-
-    // Get leave details for notification
-    const [request] = await db.execute(
-      'SELECT user_id, type FROM leave_requests WHERE id = ?',
-      [id]
+    // Check if the user whose leave is being processed is an HR
+    const [leaveRequest] = await db.execute(
+      `SELECT lr.user_id, lr.type, e.role FROM leave_requests lr 
+       JOIN employees e ON lr.user_id = e.id 
+       WHERE lr.id = ?`,
+      [req.params.id]
     );
 
-    await db.execute('UPDATE leave_requests SET status="rejected", reviewed_by=? WHERE id=?', [req.user.id, id]);
-
-    if (request.length > 0) {
-      await createNotification(
-        request[0].user_id,
-        `Your ${request[0].type} leave request has been rejected.`
-      );
+    if (leaveRequest.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
     }
 
-    await logAudit(req.user.id, 'leave_rejected', { leave_id: id });
+    const { user_id, type, role: requesterRole } = leaveRequest[0];
+
+    // If requester is HR (or Admin), ONLY Admin can reject
+    if (requesterRole === 'hr' || requesterRole === 'admin') {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Access denied: Only Admins can reject HR/Admin leaves' });
+      }
+    }
+
+    await db.execute('UPDATE leave_requests SET status="rejected", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
+
+    // Send Notification
+    await createNotification(
+      user_id,
+      `Your ${type} leave request has been rejected.`
+    );
+
+    // Log audit
+    await logAudit(req.user.id, 'leave_rejected', {
+      leave_id: req.params.id,
+      applicant_role: requesterRole
+    });
     res.json({ message: 'Leave rejected' });
   } catch (error) {
     console.error('Reject leave error:', error);
@@ -500,27 +532,32 @@ export async function rejectLeaveRequest(req, res) {
 ====================== */
 export async function getHrAnalytics(req, res) {
   try {
+    const { startDate, endDate } = req.query;
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     const [[summary]] = await db.execute(`
       SELECT
         (SELECT COUNT(*) FROM employees) AS totalEmployees,
-      (SELECT COUNT(*) FROM employees WHERE role = 'manager') AS totalManagers,
+        (SELECT COUNT(*) FROM employees WHERE role = 'manager') AS totalManagers,
         (SELECT COUNT(*) FROM employees WHERE role = 'hr') AS totalHr,
-          (SELECT COUNT(*) FROM employees WHERE role = 'employee') AS totalRegulars,
-            (SELECT COUNT(*) FROM leave_requests WHERE status = 'approved') AS approvedLeaves,
-              (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS pendingLeaves,
-                (SELECT COUNT(*) FROM leave_requests WHERE status = 'rejected') AS rejectedLeaves
-                  `);
+        (SELECT COUNT(*) FROM employees WHERE role = 'employee') AS totalRegulars,
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'approved' AND start_date BETWEEN ? AND ?) AS approvedLeaves,
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND start_date BETWEEN ? AND ?) AS pendingLeaves,
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'rejected' AND start_date BETWEEN ? AND ?) AS rejectedLeaves
+    `, [start, end, start, end, start, end]);
 
     const [deptStats] = await db.execute(`
       SELECT department, COUNT(*) AS count FROM employees WHERE department IS NOT NULL GROUP BY department
-      `);
+    `);
 
     const [leaveDeptStats] = await db.execute(`
       SELECT e.department, COUNT(*) AS leaveCount
       FROM leave_requests lr 
       JOIN employees e ON lr.user_id = e.id 
+      WHERE lr.start_date BETWEEN ? AND ?
       GROUP BY e.department
-    `);
+    `, [start, end]);
 
     res.json({
       summary,
@@ -528,6 +565,7 @@ export async function getHrAnalytics(req, res) {
       departmentLeaveDistribution: leaveDeptStats,
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Failed to fetch HR analytics' });
   }
 }
@@ -1222,6 +1260,72 @@ export async function exportLeaves(req, res) {
   } catch (error) {
     console.error('Export leaves error:', error);
     res.status(500).json({ error: 'Failed to export leaves' });
+  }
+}
+
+export async function exportEmployees(req, res) {
+  try {
+    const query = `
+      SELECT 
+        id, name, email, role, department, 
+        phone, joined_on, status, 
+        dob, gender, blood_group, address
+      FROM employees 
+      ORDER BY created_at DESC
+    `;
+    const [rows] = await db.execute(query);
+    res.json(rows);
+  } catch (error) {
+    console.error('Export employees error:', error);
+    res.status(500).json({ error: 'Failed to export employees' });
+  }
+}
+
+export async function getWorkHoursStats(req, res) {
+  try {
+    const { startDate, endDate } = req.query;
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Average work hours per department
+    const [deptHours] = await db.execute(`
+      SELECT 
+        e.department, 
+        AVG(
+          TIMESTAMPDIFF(HOUR, 
+            CONCAT(a.attendance_date, ' ', a.check_in_time), 
+            CONCAT(a.attendance_date, ' ', a.check_out_time)
+          )
+        ) as avg_hours
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      WHERE a.check_out_time IS NOT NULL 
+        AND a.attendance_date BETWEEN ? AND ?
+        AND e.department IS NOT NULL
+      GROUP BY e.department
+    `, [start, end]);
+
+    // Daily average work hours (Trend)
+    const [dailyTrend] = await db.execute(`
+      SELECT 
+        DATE_FORMAT(attendance_date, '%Y-%m-%d') as date,
+        AVG(
+          TIMESTAMPDIFF(HOUR, 
+            CONCAT(attendance_date, ' ', check_in_time), 
+            CONCAT(attendance_date, ' ', check_out_time)
+          )
+        ) as avg_hours
+      FROM attendance a
+      WHERE check_out_time IS NOT NULL 
+        AND attendance_date BETWEEN ? AND ?
+      GROUP BY date
+      ORDER BY date ASC
+    `, [start, end]);
+
+    res.json({ departmentHours: deptHours, dailyTrend });
+  } catch (error) {
+    console.error('Work hours stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch work hours stats' });
   }
 }
 

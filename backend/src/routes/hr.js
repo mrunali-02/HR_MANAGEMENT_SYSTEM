@@ -8,7 +8,13 @@ import {
   getHrAnalytics,
   getManagers,
   assignManager,
-  getDashboardSummary
+  getDashboardSummary,
+  getAttendanceReport,
+  getLeaveReport,
+  exportAttendance,
+  exportLeaves,
+  exportEmployees,
+  getWorkHoursStats
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -28,5 +34,13 @@ router.put('/leave-requests/:id/approve', approveLeaveRequest);
 router.put('/leave-requests/:id/reject', rejectLeaveRequest);
 router.get('/analytics', getHrAnalytics);
 router.get('/dashboard/summary', getDashboardSummary);
+router.get('/analytics/work-hours', getWorkHoursStats);
+
+// Reports & Exports
+router.get('/reports/attendance', getAttendanceReport);
+router.get('/reports/leaves', getLeaveReport);
+router.get('/export/attendance', exportAttendance);
+router.get('/export/leaves', exportLeaves);
+router.get('/export/employees', exportEmployees);
 
 export default router;

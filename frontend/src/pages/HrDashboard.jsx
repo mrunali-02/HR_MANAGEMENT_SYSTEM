@@ -13,11 +13,12 @@ import {
   Bar,
   XAxis,
   YAxis,
+  LineChart,
+  Line,
   CartesianGrid,
 } from 'recharts';
 import './HrDashboard.css';
 import CalendarView from '../components/CalendarView';
-
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -25,12 +26,11 @@ const TABS = {
   DASHBOARD: 'dashboard',
   EMPLOYEES: 'employees',
   LEAVE_APPLICATIONS: 'leaveApplications',
+  APPLY_LEAVE: 'applyLeave',
   CALENDAR: 'calendar',
   ANALYTICS: 'analytics',
   SETTINGS: 'settings',
 };
-
-
 
 function HrDashboard() {
   const { user, logout } = useAuth();
@@ -41,8 +41,29 @@ function HrDashboard() {
   const [managers, setManagers] = useState([]);
   const [leaveApplications, setLeaveApplications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [assigningManager, setAssigningManager] = useState({});
+  const [workHoursStats, setWorkHoursStats] = useState(null);
   const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [analyticsFilters, setAnalyticsFilters] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  });
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [leaveFilter, setLeaveFilter] = useState({
+    search: '',
+    type: 'all'
+  });
+  const [assigningManager, setAssigningManager] = useState({});
+
+  // My Leave Application State (missing earlier)
+  const [myLeaveHistory, setMyLeaveHistory] = useState([]);
+  const [myLeaveForm, setMyLeaveForm] = useState({
+    type: 'sick',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    document: null
+  });
+  const [myLeaveSubmitting, setMyLeaveSubmitting] = useState(false);
 
   // Attendance & Calendar
   const [holidays, setHolidays] = useState([]);
@@ -50,6 +71,31 @@ function HrDashboard() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [checkoutMarked, setCheckoutMarked] = useState(false);
+
+  // Settings State
+  const [settingsForm, setSettingsForm] = useState({
+    name: '',
+    email: '',
+    role: '',
+    department: '',
+    joined_on: '',
+    dob: '',
+    gender: '',
+    blood_group: '',
+    phone: '',
+    emergency_contact: '',
+    address: '',
+    display_name: '',
+    bio: '',
+  });
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,26 +106,31 @@ function HrDashboard() {
       navigate('/login');
       return;
     }
+
+    // load required data once
     Promise.all([
       fetchUsers(),
       fetchManagers(),
+      fetchDashboardSummary(),
       fetchLeaveApplications(),
       fetchHolidays(),
-
       fetchMyAttendance(),
-      fetchDashboardSummary()
+      fetchMyLeaves(),
+      fetchAnalytics(),
+      fetchSettings()
     ]).finally(() => {
       setLoading(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate]);
 
-  // ... (existing code) ...
+  /* ---------- Fetchers ---------- */
 
   const fetchHolidays = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/holidays`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setHolidays(response.data.holidays || []);
     } catch (err) {
@@ -92,7 +143,7 @@ function HrDashboard() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/attendance`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setAttendanceRecords(res.data.records || []);
       setTodayAttendance(res.data.today || null);
@@ -103,18 +154,30 @@ function HrDashboard() {
     }
   };
 
+  const fetchMyLeaves = async () => {
+    if (!user?.id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/leaves`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMyLeaveHistory(res.data.leaves || res.data || []);
+    } catch (err) {
+      console.error('Error fetching my leaves:', err);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/hr/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setUsers(response.data.users || []);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError(err.response?.data?.error || 'Failed to fetch users');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -122,40 +185,11 @@ function HrDashboard() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/hr/managers`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setManagers(response.data.managers || []);
     } catch (err) {
       console.error('Error fetching managers:', err);
-      // Don't set error, just log it
-    }
-  };
-
-  const fetchLeaveApplications = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/hr/leave-requests`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setLeaveApplications(response.data.requests || response.data || []);
-    } catch (err) {
-      console.error('Error fetching leave requests:', err);
-      setLeaveApplications([]);
-    }
-  };
-  const fetchAnalytics = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/hr/analytics`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setAnalytics(res.data);
-    } catch (err) {
-      console.error("Analytics fetch failed", err);
     }
   };
 
@@ -163,62 +197,178 @@ function HrDashboard() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/hr/dashboard/summary`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setDashboardSummary(response.data);
+      setDashboardSummary(response.data || {});
     } catch (err) {
       console.error('Error fetching dashboard summary:', err);
+      // don't break rendering if endpoint missing; keep dashboardSummary null
     }
   };
 
+  const fetchLeaveApplications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/hr/leave-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setLeaveApplications(response.data.requests || response.data || []);
+    } catch (err) {
+      console.error('Error fetching leave requests:', err);
+      setLeaveApplications([]);
+    }
+  };
 
+  const fetchAnalytics = async (filters = analyticsFilters) => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = {
+        startDate: filters.startDate,
+        endDate: filters.endDate
+      };
+      const [res, workRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/hr/analytics`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params
+        }),
+        axios.get(`${API_BASE_URL}/hr/analytics/work-hours`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params
+        }),
+      ]);
+      setAnalytics(res.data || {});
+      setWorkHoursStats(workRes.data || {});
+    } catch (err) {
+      console.error('Analytics fetch failed', err);
+    }
+  };
+
+  const fetchSettings = async () => {
+    if (!user?.id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/hr/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const u = response.data.user || {};
+      const p = response.data.profile || {};
+      setSettingsForm({
+        name: u.name || '',
+        email: u.email || '',
+        role: u.role || '',
+        department: u.department || '',
+        joined_on: u.joined_on ? u.joined_on.substring(0, 10) : '',
+        dob: u.dob ? u.dob.substring(0, 10) : '',
+        gender: u.gender || '',
+        blood_group: u.blood_group || '',
+        phone: u.phone || '',
+        emergency_contact: u.emergency_contact || '',
+        address: u.address || '',
+        display_name: p.display_name || '',
+        bio: p.bio || '',
+      });
+    } catch (err) {
+      console.error('Fetch settings failed', err);
+    }
+  };
+
+  /* ---------- CSV helper + downloads ---------- */
+
+  const downloadCSV = (data, filename) => {
+    // guard if response isn't an array or is empty
+    if (!Array.isArray(data) || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => JSON.stringify(row[header] ?? '')).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadReport = async (type) => {
+    try {
+      const token = localStorage.getItem('token');
+      let endpoint = '';
+      let filename = '';
+      switch (type) {
+        case 'attendance':
+          endpoint = `${API_BASE_URL}/hr/export/attendance`;
+          filename = 'attendance_report.csv';
+          break;
+        case 'leaves':
+          endpoint = `${API_BASE_URL}/hr/export/leaves`;
+          filename = 'leave_report.csv';
+          break;
+        case 'employees':
+          endpoint = `${API_BASE_URL}/hr/export/employees`;
+          filename = 'employee_report.csv';
+          break;
+        case 'work_hours':
+          endpoint = `${API_BASE_URL}/hr/export/attendance`;
+          filename = 'work_hours_report.csv';
+          break;
+        default:
+          return;
+      }
+      const response = await axios.get(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+      downloadCSV(response.data, filename);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Failed to download report');
+    }
+  };
+
+  /* ---------- Leave approval/rejection ---------- */
 
   const handleApproveLeave = async (leaveId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_BASE_URL}/hr/leave-requests/${leaveId}/approve`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.put(`${API_BASE_URL}/hr/leave-requests/${leaveId}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setSuccess('Leave request approved successfully!');
       fetchLeaveApplications();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to approve leave request');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
   const handleRejectLeave = async (leaveId) => {
     if (!window.confirm('Are you sure you want to reject this leave?')) return;
-
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_BASE_URL}/hr/leave-requests/${leaveId}/reject`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.put(`${API_BASE_URL}/hr/leave-requests/${leaveId}/reject`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setSuccess('Leave request rejected successfully!');
       fetchLeaveApplications();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to reject leave request');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
+  /* ---------- Users / managers ---------- */
+
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Confirm deletion?')) return;
-
     try {
       setError('');
       setSuccess('');
       const token = localStorage.getItem('token');
-      await axios.delete(`${API_BASE_URL}/hr/users/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`${API_BASE_URL}/hr/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setSuccess('User deleted successfully!');
       fetchUsers();
       setTimeout(() => setSuccess(''), 3000);
@@ -234,140 +384,55 @@ function HrDashboard() {
       setError('');
       setSuccess('');
       const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_BASE_URL}/hr/employees/${employeeId}/assign-manager`,
-        { managerId: managerId || null },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.put(`${API_BASE_URL}/hr/employees/${employeeId}/assign-manager`, { managerId: managerId || null }, { headers: { Authorization: `Bearer ${token}` } });
       setSuccess('Manager assigned successfully!');
-      fetchUsers(); // Refresh the list
-      // Clear success message after 3 seconds
+      fetchUsers();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to assign manager');
-      // Clear error message after 5 seconds
       setTimeout(() => setError(''), 5000);
     } finally {
       setAssigningManager(prev => ({ ...prev, [employeeId]: false }));
     }
   };
 
+  /* ---------- Attendance ---------- */
+
   const handleMarkAttendance = async () => {
-    if (attendanceMarked || todayAttendance?.status === 'present') {
-      return;
+    if (attendanceMarked || todayAttendance?.status === 'present') return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Checked in successfully!');
+      fetchMyAttendance();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      alert('Check-in failed');
     }
-
-    setError('');
-    setSuccess('');
-
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      return;
-    }
-
-    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
-    if (!confirmCheckIn) return;
-
-    setSuccess('Fetching location...');
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude, accuracy } = position.coords;
-          const token = localStorage.getItem('token');
-          await axios.post(
-            `${API_BASE_URL}/employee/${user.id}/attendance/mark`,
-            { latitude, longitude, accuracy },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-
-          setSuccess('Attendance marked successfully!');
-          setAttendanceMarked(true);
-          fetchMyAttendance();
-          setTimeout(() => setSuccess(''), 3000);
-        } catch (err) {
-          console.error('Error marking attendance:', err);
-          let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
-          if (err.response?.data?.distance) {
-            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
-          }
-          setError(errorMsg);
-          if (success === 'Fetching location...') setSuccess(''); // Clear loading text
-        }
-      },
-      (geoError) => {
-        console.error('Geolocation error:', geoError);
-        let msg = 'Unable to retrieve location.';
-        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
-        else if (geoError.code === 2) msg = 'Location unavailable.';
-        else if (geoError.code === 3) msg = 'Location request timed out.';
-        setError(msg);
-        setSuccess('');
-      },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
-    );
   };
 
   const handleCheckout = async () => {
     if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) return;
-
-    setError('');
-    setSuccess('');
-
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const hours = res.data.total_hours || '0';
+      setSuccess(`Checked out! Worked ${hours} hours.`);
+      fetchMyAttendance();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      alert('Checkout failed');
     }
-
-    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
-    if (!confirmCheckout) return;
-
-    setSuccess('Fetching location...');
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude, accuracy } = position.coords;
-          const token = localStorage.getItem('token');
-          const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
-            { latitude, longitude, accuracy },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const hours = res.data.total_hours || '0';
-          setSuccess(`Checked out! Worked ${hours} hours.`);
-          setCheckoutMarked(true); // Update local state immediately
-          fetchMyAttendance();
-          setTimeout(() => setSuccess(''), 3000);
-        } catch (err) {
-          console.error('Error marking checkout:', err);
-          let errorMsg = err.response?.data?.error || 'Checkout failed';
-          if (err.response?.data?.distance) {
-            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
-          }
-          setError(errorMsg);
-          if (success === 'Fetching location...') setSuccess('');
-        }
-      },
-      (geoError) => {
-        console.error('Geolocation error:', geoError);
-        let msg = 'Unable to retrieve location.';
-        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
-        else if (geoError.code === 2) msg = 'Location unavailable.';
-        else if (geoError.code === 3) msg = 'Location request timed out.';
-        setError(msg);
-        setSuccess('');
-      },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
-    );
   };
 
   const handleToggleHoliday = async (dateStr, isHoliday) => {
     try {
       const token = localStorage.getItem('token');
       if (isHoliday) {
-        // Find holiday with local date comparison
         const holiday = holidays.find(h => {
           let hDate = h.date;
           if (typeof h.date === 'string') {
@@ -379,18 +444,13 @@ function HrDashboard() {
           }
           return hDate === dateStr;
         });
-
         if (holiday && window.confirm(`Delete holiday "${holiday.name}"?`)) {
-          await axios.delete(`${API_BASE_URL}/holidays/${holiday.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          await axios.delete(`${API_BASE_URL}/holidays/${holiday.id}`, { headers: { Authorization: `Bearer ${token}` } });
         }
       } else {
         const name = prompt('Enter holiday name:');
         if (!name) return;
-        await axios.post(`${API_BASE_URL}/holidays`, { date: dateStr, name }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await axios.post(`${API_BASE_URL}/holidays`, { date: dateStr, name }, { headers: { Authorization: `Bearer ${token}` } });
       }
       fetchHolidays();
     } catch (err) {
@@ -403,9 +463,130 @@ function HrDashboard() {
     navigate('/login');
   };
 
-  const totalEmployees = users.filter((u) => u.role === 'employee').length;
-  const totalManagers = users.filter((u) => u.role === 'manager').length;
-  const totalHr = users.filter((u) => u.role === 'hr').length;
+  /* ---------- My leave form handlers ---------- */
+
+  const handleMyLeaveFormChange = (field, value) => {
+    if (field === 'startDate' || field === 'endDate') {
+      const isHoliday = holidays.some(h => {
+        let hDate = h.date;
+        if (typeof h.date === 'string') {
+          const d = new Date(h.date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          hDate = `${year}-${month}-${day}`;
+        }
+        return hDate === value;
+      });
+      if (isHoliday) {
+        alert('Selected date is a holiday.');
+        return;
+      }
+    }
+    if (field === 'type' && ['casual', 'paid'].includes(value)) {
+      setMyLeaveForm(prev => ({ ...prev, [field]: value, document: null }));
+      return;
+    }
+    setMyLeaveForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyMyLeave = async (e) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    setError('');
+    setSuccess('');
+    if (!myLeaveForm.startDate || !myLeaveForm.endDate || !myLeaveForm.reason) {
+      setError('Please fill all leave fields.');
+      return;
+    }
+    setMyLeaveSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('type', myLeaveForm.type);
+      formData.append('start_date', myLeaveForm.startDate);
+      formData.append('end_date', myLeaveForm.endDate);
+      formData.append('reason', myLeaveForm.reason);
+      if (myLeaveForm.document) formData.append('document', myLeaveForm.document);
+      await axios.post(`${API_BASE_URL}/employee/${user.id}/leaves`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+      });
+      setSuccess('Leave request submitted successfully!');
+      setMyLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '', document: null });
+      fetchMyLeaves();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to apply leave');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setMyLeaveSubmitting(false);
+    }
+  };
+
+  const handleCancelMyLeave = async (leaveId) => {
+    if (!window.confirm('Cancel this leave request?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${user.id}/leaves/${leaveId}/cancel`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setSuccess('Cancelled successfully!');
+      fetchMyLeaves();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to cancel');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  /* ---------- Settings / password ---------- */
+
+  const handleSettingsChange = (field, value) => setSettingsForm(prev => ({ ...prev, [field]: value }));
+
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    setSettingsSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${user.id}/profile`, settingsForm, { headers: { Authorization: `Bearer ${token}` } });
+      setSuccess('Profile updated successfully!');
+      fetchSettings();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      alert('Failed to update profile');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = (field, value) => setPasswordForm(prev => ({ ...prev, [field]: value }));
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert("New passwords don't match");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${user.id}/change-password`, {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      alert('Password changed successfully!');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  /* ---------- Derived counts ---------- */
+  const totalEmployees = users.filter(u => u.role === 'employee').length;
+  const totalManagers = users.filter(u => u.role === 'manager').length;
+  const totalHr = users.filter(u => u.role === 'hr').length;
+
+  /* ---------- Render helpers inside component ---------- */
 
   const renderDashboard = () => (
     <div className="space-y-6">
@@ -558,85 +739,83 @@ function HrDashboard() {
     </div>
   );
 
-  const renderEmployeeList = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Employee List</h2>
-      {error && <div className="bg-red-100 text-red-700 px-4 py-2 rounded">{error}</div>}
-      {success && <div className="bg-green-100 text-green-700 px-4 py-2 rounded">{success}</div>}
+  const renderEmployeeList = () => {
+    const filteredUsers = users.filter(u => {
+      const term = employeeSearch.toLowerCase();
+      return (
+        (u.name && u.name.toLowerCase().includes(term)) ||
+        (u.email && u.email.toLowerCase().includes(term)) ||
+        (u.phone && u.phone.includes(term)) ||
+        (u.role && u.role.toLowerCase().includes(term))
+      );
+    });
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left">Name</th>
-              <th className="px-4 py-2 text-left">Email</th>
-              <th className="px-4 py-2 text-left">Role</th>
-              <th className="px-4 py-2 text-left">Manager</th>
-              <th className="px-4 py-2 text-left">Assign Manager</th>
-              <th className="px-4 py-2 text-left">Joined</th>
-              <th className="px-4 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2">{u.name || u.email}</td>
-                <td className="px-4 py-2">{u.email}</td>
-                <td className="px-4 py-2 capitalize">{u.role}</td>
-                <td className="px-4 py-2">
-                  {u.manager_name ? (
-                    <span className="text-sm text-gray-700">{u.manager_name}</span>
-                  ) : (
-                    <span className="text-sm text-gray-400 italic">No manager</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {u.role === 'employee' && (
-                    <select
-                      value={u.manager_id || ''}
-                      onChange={(e) => handleAssignManager(u.id, e.target.value || null)}
-                      disabled={assigningManager[u.id]}
-                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">-- No Manager --</option>
-                      {managers.map((manager) => (
-                        <option key={manager.id} value={manager.id}>
-                          {manager.name || manager.email}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {u.role !== 'employee' && (
-                    <span className="text-sm text-gray-400">-</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {u.role !== 'admin' && (
-                    <button
-                      onClick={() => handleDeleteUser(u.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Employee List</h2>
+          <input
+            type="text"
+            placeholder="Search by name, email, phone..."
+            value={employeeSearch}
+            onChange={(e) => setEmployeeSearch(e.target.value)}
+            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+          />
+        </div>
+
+        {error && <div className="bg-red-100 text-red-700 px-4 py-2 rounded">{error}</div>}
+        {success && <div className="bg-green-100 text-green-700 px-4 py-2 rounded">{success}</div>}
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td className="px-4 py-4 text-center" colSpan={7}>
-                  No employees found.
-                </td>
+                <th className="px-4 py-2 text-left">Name</th>
+                <th className="px-4 py-2 text-left">Email</th>
+                <th className="px-4 py-2 text-left">Role</th>
+                <th className="px-4 py-2 text-left">Manager</th>
+                <th className="px-4 py-2 text-left">Assign Manager</th>
+                <th className="px-4 py-2 text-left">Joined</th>
+                <th className="px-4 py-2 text-right">Actions</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2">{u.name || u.email}</td>
+                  <td className="px-4 py-2">{u.email}</td>
+                  <td className="px-4 py-2 capitalize">{u.role}</td>
+                  <td className="px-4 py-2">{u.manager_name ? <span className="text-sm text-gray-700">{u.manager_name}</span> : <span className="text-sm text-gray-400 italic">No manager</span>}</td>
+                  <td className="px-4 py-2">
+                    {u.role === 'employee' ? (
+                      <select
+                        value={u.manager_id || ''}
+                        onChange={e => handleAssignManager(u.id, e.target.value || null)}
+                        disabled={assigningManager[u.id]}
+                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">-- No Manager --</option>
+                        {managers.map(m => <option key={m.id} value={m.id}>{m.name || m.email}</option>)}
+                      </select>
+                    ) : <span className="text-sm text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-2">{u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}</td>
+                  <td className="px-4 py-2 text-right">
+                    {u.role !== 'admin' && <button onClick={() => handleDeleteUser(u.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>}
+                  </td>
+                </tr>
+              ))}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td className="px-4 py-4 text-center" colSpan={7}>No employees found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderLeaveApplications = () => {
     const calculateDays = (start, end) => {
@@ -648,49 +827,60 @@ function HrDashboard() {
       return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     };
 
+    const filteredLeaves = leaveApplications.filter(la => {
+      const term = leaveFilter.search.toLowerCase();
+      const matchSearch = (la.employee_name && la.employee_name.toLowerCase().includes(term)) ||
+        (la.reason && la.reason.toLowerCase().includes(term));
+      const matchType = leaveFilter.type === 'all' || la.type === leaveFilter.type;
+      // Exclude HR and Admin leaves from this view (HR can only approve employees)
+      const isManageable = la.role !== 'hr' && la.role !== 'admin';
+      return matchSearch && matchType && isManageable;
+    });
+
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Leave Applications</h2>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <h2 className="text-2xl font-bold">Leave Applications</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search employee or reason..."
+              value={leaveFilter.search}
+              onChange={(e) => setLeaveFilter(prev => ({ ...prev, search: e.target.value }))}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+            />
+            <select
+              value={leaveFilter.type}
+              onChange={(e) => setLeaveFilter(prev => ({ ...prev, type: e.target.value }))}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Types</option>
+              <option value="sick">Sick</option>
+              <option value="casual">Casual</option>
+              <option value="paid">Planned</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
 
-        {leaveApplications.length === 0 && <p className="text-gray-500">No leave applications found.</p>}
+        {filteredLeaves.length === 0 && <p className="text-gray-500">No leave applications found.</p>}
 
-        {leaveApplications.map((la) => (
+        {filteredLeaves.map(la => (
           <div key={la.id} className="border bg-white shadow p-4 rounded flex flex-col md:flex-row justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <span className="font-bold text-lg">{la.employee_name}</span>
-                <span className={`px-2 py-0.5 text-xs rounded-full border ${la.type === 'sick' ? 'bg-orange-50 border-orange-200 text-orange-700' :
-                  la.type === 'casual' ? 'bg-blue-50 border-blue-200 text-blue-700' :
-                    'bg-gray-50 border-gray-200 text-gray-700'
-                  }`}>
-                  {la.type}
-                </span>
-                <span className={`px-2 py-0.5 text-xs rounded-full ${la.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  la.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    la.status === 'cancelled' ? 'bg-gray-100 text-gray-500' :
-                      'bg-yellow-100 text-yellow-800'
-                  }`}>
-                  {la.status}
-                </span>
+                <span className={`px-2 py-0.5 text-xs rounded-full border ${la.type === 'sick' ? 'bg-orange-50 border-orange-200 text-orange-700' : la.type === 'casual' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}>{la.type}</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${la.status === 'approved' ? 'bg-green-100 text-green-800' : la.status === 'rejected' ? 'bg-red-100 text-red-800' : la.status === 'cancelled' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-800'}`}>{la.status}</span>
               </div>
 
               <div className="text-sm text-gray-600 space-y-1">
-                <p>
-                  <span className="font-medium">Period:</span> {la.start_date} to {la.end_date}
-                  <span className="font-bold ml-2">({la.days || calculateDays(la.start_date, la.end_date)} Days)</span>
-                </p>
+                <p><span className="font-medium">Period:</span> {la.start_date} to {la.end_date} <span className="font-bold ml-2">({la.days || calculateDays(la.start_date, la.end_date)} Days)</span></p>
                 <p><span className="font-medium">Reason:</span> {la.reason || 'No reason provided'}</p>
                 {la.document_url && (
                   <p>
                     <span className="font-medium">Document:</span>
-                    <a
-                      href={`${API_BASE_URL.replace('/api', '')}/${la.document_url}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-2 text-indigo-600 hover:text-indigo-800 underline"
-                    >
-                      View Attachment
-                    </a>
+                    <a href={`${API_BASE_URL.replace('/api', '')}/${la.document_url}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-indigo-600 hover:text-indigo-800 underline">View Attachment</a>
                   </p>
                 )}
               </div>
@@ -699,16 +889,16 @@ function HrDashboard() {
             <div className="flex items-start gap-2 min-w-[150px] justify-end">
               {la.status === 'pending' ? (
                 <>
-                  <button onClick={() => handleApproveLeave(la.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">
-                    Approve
-                  </button>
-                  <button onClick={() => handleRejectLeave(la.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">
-                    Reject
-                  </button>
+                  {la.role !== 'hr' && la.role !== 'admin' ? (
+                    <>
+                      <button onClick={() => handleApproveLeave(la.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">Approve</button>
+                      <button onClick={() => handleRejectLeave(la.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium transition">Reject</button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-amber-600 italic mt-1 font-medium bg-amber-50 px-2 py-1 rounded border border-amber-200">Requires Admin Approval</span>
+                  )}
                 </>
-              ) : (
-                <span className="text-xs text-gray-400 italic mt-1">Processed</span>
-              )}
+              ) : <span className="text-xs text-gray-400 italic mt-1">Processed</span>}
             </div>
           </div>
         ))}
@@ -732,73 +922,116 @@ function HrDashboard() {
       <p className="text-3xl font-bold">{value ?? 0}</p>
     </div>
   );
+
   const renderAnalytics = () => {
-    if (!analytics) {
-      return <div className="text-gray-600">Loading analytics...</div>;
-    }
-
-    const deptData = analytics.departmentDistribution || [];
-    const leaveDeptData = analytics.departmentLeaveDistribution || [];
-
+    const deptData = analytics?.departmentDistribution || [];
+    const leaveDeptData = analytics?.departmentLeaveDistribution || [];
     const leaveStatusData = [
-      { name: 'Approved', value: analytics.summary?.approvedLeaves || 0 },
-      { name: 'Pending', value: analytics.summary?.pendingLeaves || 0 },
-      { name: 'Rejected', value: analytics.summary?.rejectedLeaves || 0 },
+      { name: 'Approved', value: analytics?.summary?.approvedLeaves || 0 },
+      { name: 'Pending', value: analytics?.summary?.pendingLeaves || 0 },
+      { name: 'Rejected', value: analytics?.summary?.rejectedLeaves || 0 },
     ];
+    const PIE_COLORS = ['#22c55e', '#eab308', '#ef4444'];
 
-    const PIE_COLORS = ['#22c55e', '#eab308', '#ef4444']; // green, yellow, red
-    const BAR_COLORS = ['#3b82f6', '#22c55e', '#a855f7', '#f97316'];
+    if (!analytics) return <div className="text-gray-600">Loading analytics...</div>;
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">HR Analytics Overview</h2>
+      <div className="space-y-8 pb-10">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">HR Analytics</h2>
+            <p className="text-sm text-gray-500">
+              Showing data from <span className="font-semibold">{analyticsFilters.startDate}</span> to <span className="font-semibold">{analyticsFilters.endDate}</span>
+            </p>
+          </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card label="Total Employees" value={analytics.summary?.totalEmployees} color="indigo" />
-          <Card label="Managers" value={analytics.summary?.totalManagers} color="emerald" />
-          <Card label="HR" value={analytics.summary?.totalHr} color="blue" />
-          <Card label="Regular Staff" value={analytics.summary?.totalRegulars} color="amber" />
-          <Card label="Pending Leaves" value={analytics.summary?.pendingLeaves} color="yellow" />
-          <Card label="Approved Leaves" value={analytics.summary?.approvedLeaves} color="green" />
-          <Card label="Rejected Leaves" value={analytics.summary?.rejectedLeaves} color="red" />
+          <div className="flex flex-col md:flex-row gap-3 items-end">
+            <div className="flex gap-2 items-center">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={analyticsFilters.startDate}
+                  onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="border rounded px-2 py-1 text-sm bg-gray-50"
+                  max={analyticsFilters.endDate}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={analyticsFilters.endDate}
+                  onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="border rounded px-2 py-1 text-sm bg-gray-50"
+                  min={analyticsFilters.startDate}
+                />
+              </div>
+              <button
+                onClick={() => fetchAnalytics()}
+                className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 h-[30px] self-end mb-[1px]"
+              >
+                Apply
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => handleDownloadReport('employees')} className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-50">
+                Staffing CSV
+              </button>
+              <button onClick={() => handleDownloadReport('leaves')} className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-50">
+                Leaves CSV
+              </button>
+              <button onClick={() => handleDownloadReport('attendance')} className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-50">
+                Attendance CSV
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Charts Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card label="Total Employees" value={analytics.summary?.totalEmployees} color="indigo" />
+          <Card label="Managers" value={analytics.summary?.totalManagers} color="emerald" />
+          <Card label="HR Staff" value={analytics.summary?.totalHr} color="blue" />
+          <Card label="Pending Leaves" value={analytics.summary?.pendingLeaves} color="yellow" />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pie Chart - Leave Status */}
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Leave Status Overview</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Distribution of leave requests by status.
-            </p>
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">Avg Work Hours by Department (30 Days)</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={leaveStatusData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={80}
-                    label
-                  >
-                    {leaveStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
+                <BarChart data={workHoursStats?.departmentHours || []}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="department" />
+                  <YAxis />
                   <Tooltip />
-                  <Legend />
-                </PieChart>
+                  <Bar dataKey="avg_hours" name="Avg Hours" fill="#8884d8" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Bar Chart - Employees by Department */}
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Employees by Department</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Headcount distribution across departments.
-            </p>
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">Daily Work Hours Trend (7 Days)</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={workHoursStats?.dailyTrend || []}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="avg_hours" name="Avg Hours" stroke="#82ca9d" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-xl shadow flex flex-col">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">Staffing: Employees by Department</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={deptData}>
@@ -806,26 +1039,30 @@ function HrDashboard() {
                   <XAxis dataKey="department" />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="count">
-                    {deptData.map((entry, index) => (
-                      <Cell
-                        key={`bar-cell-${index}`}
-                        fill={BAR_COLORS[index % BAR_COLORS.length]}
-                      />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="count" name="Employees" fill="#3b82f6" />
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow flex flex-col">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900">Leave Distribution (Status)</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={leaveStatusData} dataKey="value" nameKey="name" outerRadius={80} label>
+                    {leaveStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* Bar Chart - Leaves by Department */}
         <div className="bg-white p-6 rounded-xl shadow flex flex-col">
           <h3 className="text-lg font-semibold mb-2 text-gray-900">Leaves by Department</h3>
-          <p className="text-xs text-gray-500 mb-4">
-            Number of leave requests raised from each department.
-          </p>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={leaveDeptData}>
@@ -833,14 +1070,7 @@ function HrDashboard() {
                 <XAxis dataKey="department" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="leaveCount">
-                  {leaveDeptData.map((entry, index) => (
-                    <Cell
-                      key={`leave-bar-${index}`}
-                      fill={BAR_COLORS[index % BAR_COLORS.length]}
-                    />
-                  ))}
-                </Bar>
+                <Bar dataKey="leaveCount" name="Leaves" fill="#f97316" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -849,89 +1079,213 @@ function HrDashboard() {
     );
   };
 
+  const renderApplyLeave = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">Apply for Leave (HR)</h2>
+
+      {error && <div className="bg-red-100 text-red-700 px-4 py-2 rounded mb-4">{error}</div>}
+      {success && <div className="bg-green-100 text-green-700 px-4 py-2 rounded mb-4">{success}</div>}
+
+      <div className="bg-white p-6 rounded-xl shadow-sm">
+        <form onSubmit={handleApplyMyLeave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Leave Type</label>
+            <select value={myLeaveForm.type} onChange={e => handleMyLeaveFormChange('type', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+              <option value="sick">Sick Leave</option>
+              <option value="casual">Casual Leave</option>
+              <option value="paid">Planned Leave</option>
+            </select>
+          </div>
+
+          <div />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Start Date</label>
+            <input type="date" value={myLeaveForm.startDate} onChange={e => handleMyLeaveFormChange('startDate', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <input type="date" min={myLeaveForm.startDate} value={myLeaveForm.endDate} onChange={e => handleMyLeaveFormChange('endDate', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Reason</label>
+            <textarea rows="2" value={myLeaveForm.reason} onChange={e => handleMyLeaveFormChange('reason', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" placeholder="Reason for leave..." />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Document {['casual', 'paid'].includes(myLeaveForm.type) ? '(Not Required)' : '(Optional)'}
+            </label>
+            <input
+              type="file"
+              disabled={['casual', 'paid'].includes(myLeaveForm.type)}
+              onChange={e => handleMyLeaveFormChange('document', e.target.files[0])}
+              className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <button type="submit" disabled={myLeaveSubmitting} className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+              {myLeaveSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm">
+        <h3 className="text-lg font-bold mb-4">My Leave History</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {myLeaveHistory.length === 0 && <tr><td colSpan="4" className="px-4 py-4 text-center text-gray-500">No leaves found.</td></tr>}
+              {myLeaveHistory.map(l => (
+                <tr key={l.id}>
+                  <td className="px-4 py-2 capitalize">{l.type}</td>
+                  <td className="px-4 py-2">{l.start_date} to {l.end_date} <span className="text-gray-400 text-xs ml-1">({l.days} days)</span></td>
+                  <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs font-bold ${l.status === 'approved' ? 'bg-green-100 text-green-800' : l.status === 'rejected' ? 'bg-red-100 text-red-800' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}>{l.status}</span></td>
+                  <td className="px-4 py-2">{l.status === 'pending' && <button onClick={() => handleCancelMyLeave(l.id)} className="text-red-600 text-sm hover:underline">Cancel</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderCalendar = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <h2 className="text-2xl font-bold text-gray-800">My Attendance & Holidays</h2>
         <div className="flex gap-2">
-          {!attendanceMarked ? (
-            <button
-              onClick={handleMarkAttendance}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold"
-            >
-              Check In
-            </button>
-          ) : (
-            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
-          )}
-
-          {attendanceMarked && !checkoutMarked && (
-            <button
-              onClick={handleCheckout}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold"
-            >
-              Check Out
-            </button>
-          )}
-          {checkoutMarked && (
-            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
-          )}
+          {!attendanceMarked ? <button onClick={handleMarkAttendance} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold">Check In</button> : <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>}
+          {attendanceMarked && !checkoutMarked && <button onClick={handleCheckout} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold">Check Out</button>}
+          {checkoutMarked && <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>}
         </div>
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <p className="mb-4 text-sm text-gray-600">
-          Click on a date to manage holidays (HR Privilege).
-        </p>
-        <CalendarView
-          attendance={attendanceRecords}
-          holidays={holidays}
-          role="hr"
-          onDateClick={handleToggleHoliday}
-        />
+        <p className="mb-4 text-sm text-gray-600">Click on a date to manage holidays (HR Privilege).</p>
+        <CalendarView attendance={attendanceRecords} holidays={holidays} role="hr" onDateClick={handleToggleHoliday} />
       </div>
     </div>
   );
 
   const renderSettings = () => (
-    <div>
-      <h2 className="text-2xl font-bold">Profile</h2>
-      <p>Name: {user.name}</p>
-      <p>Email: {user.email}</p>
-      <p>Role: {user.role}</p>
+    <div className="space-y-8 max-w-4xl mx-auto pb-10">
+      <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
+
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Personal Details</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[
+            { label: 'Full Name', value: settingsForm.name },
+            { label: 'Email', value: settingsForm.email },
+            { label: 'Role', value: settingsForm.role },
+            { label: 'Department', value: settingsForm.department },
+            { label: 'Date of Joining', value: settingsForm.joined_on },
+            { label: 'Date of Birth', value: settingsForm.dob },
+            { label: 'Gender', value: settingsForm.gender },
+            { label: 'Blood Group', value: settingsForm.blood_group },
+          ].map(field => (
+            <div key={field.label}>
+              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{field.label}</label>
+              <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">{field.value || '-'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Contact & Preferences</h3>
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
+              <input type="text" value={settingsForm.phone} onChange={e => handleSettingsChange('phone', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Enter phone number" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Emergency Contact</label>
+              <input type="text" value={settingsForm.emergency_contact} onChange={e => handleSettingsChange('emergency_contact', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Emergency contact info" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
+            <textarea rows="2" value={settingsForm.address} onChange={e => handleSettingsChange('address', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Your residential address" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+              <input type="text" value={settingsForm.display_name} onChange={e => handleSettingsChange('display_name', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Preferred display name" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bio</label>
+              <textarea rows="1" value={settingsForm.bio} onChange={e => handleSettingsChange('bio', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Brief bio" />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button type="submit" disabled={settingsSaving} className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1">
+              {settingsSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Security</h3>
+        <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-lg">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Current Password</label>
+            <input type="password" value={passwordForm.currentPassword} onChange={e => handlePasswordChange('currentPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter current password" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">New Password</label>
+            <input type="password" value={passwordForm.newPassword} onChange={e => handlePasswordChange('newPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter new password" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <input type="password" value={passwordForm.confirmPassword} onChange={e => handlePasswordChange('confirmPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Confirm new password" />
+          </div>
+          <div className="flex justify-end pt-2">
+            <button type="submit" disabled={passwordSaving} className="bg-gray-800 text-white px-6 py-2 rounded-lg shadow-md hover:bg-gray-900 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1">
+              {passwordSaving ? 'Updating...' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 
-  if (loading)
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  /* ---------- Main render ---------- */
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
 
   return (
     <div className="min-h-screen flex bg-gray-100">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="h-16 flex items-center justify-center border-b border-gray-700 text-lg font-semibold">
-          HRMS HR Panel
-        </div>
+        <div className="h-16 flex items-center justify-center border-b border-gray-700 text-lg font-semibold">HRMS HR Panel</div>
         <nav className="flex-1 p-4 space-y-1">
-          {Object.values(TABS).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`w-full text-left px-4 py-2 rounded ${activeTab === tab ? 'bg-slate-800' : 'hover:bg-slate-700'
-                }`}
-            >
+          {Object.values(TABS).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`w-full text-left px-4 py-2 rounded ${activeTab === tab ? 'bg-slate-800' : 'hover:bg-slate-700'}`}>
               {tab.replace(/([A-Z])/g, ' $1').trim()}
             </button>
           ))}
         </nav>
-
         <div className="p-4 border-t border-gray-700">
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 w-full py-2 rounded text-sm text-white"
-          >
-            Logout
-          </button>
+          <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 w-full py-2 rounded text-sm text-white">Logout</button>
         </div>
       </aside>
 
@@ -939,6 +1293,7 @@ function HrDashboard() {
         {activeTab === TABS.DASHBOARD && renderDashboard()}
         {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
         {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+        {activeTab === TABS.APPLY_LEAVE && renderApplyLeave()}
         {activeTab === TABS.CALENDAR && renderCalendar()}
         {activeTab === TABS.ANALYTICS && renderAnalytics()}
         {activeTab === TABS.SETTINGS && renderSettings()}
