@@ -4,6 +4,13 @@ import { comparePassword, hashPassword } from '../utils/hash.js';
 import { generateToken, getExpiryDate } from '../utils/token.js';
 import { logAudit, createNotification } from '../utils/audit.js';
 
+const formatDate = (dateValue) => {
+  if (!dateValue) return null;
+  if (typeof dateValue === 'string') return dateValue.substring(0, 10);
+  const iso = dateValue.toISOString();
+  return iso.substring(0, 10);
+};
+
 /* ======================
      DASHBOARD SUMMARY
 ====================== */
@@ -412,18 +419,55 @@ export async function getLeaveStatistics(req, res) {
 
 export async function approveLeaveRequest(req, res) {
   try {
-    await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
+    const { id } = req.params;
+
+    // Get leave details for notification
+    const [request] = await db.execute(
+      'SELECT user_id, type, start_date, end_date FROM leave_requests WHERE id = ?',
+      [id]
+    );
+
+    await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, id]);
+
+    if (request.length > 0) {
+      const { user_id, type, start_date, end_date } = request[0];
+      await createNotification(
+        user_id,
+        `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
+      );
+    }
+
+    await logAudit(req.user.id, 'leave_approved', { leave_id: id });
     res.json({ message: 'Leave approved' });
   } catch (error) {
+    console.error('Approve leave error:', error);
     res.status(500).json({ error: 'Failed to approve leave' });
   }
 }
 
 export async function rejectLeaveRequest(req, res) {
   try {
-    await db.execute('UPDATE leave_requests SET status="rejected", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
+    const { id } = req.params;
+
+    // Get leave details for notification
+    const [request] = await db.execute(
+      'SELECT user_id, type FROM leave_requests WHERE id = ?',
+      [id]
+    );
+
+    await db.execute('UPDATE leave_requests SET status="rejected", reviewed_by=? WHERE id=?', [req.user.id, id]);
+
+    if (request.length > 0) {
+      await createNotification(
+        request[0].user_id,
+        `Your ${request[0].type} leave request has been rejected.`
+      );
+    }
+
+    await logAudit(req.user.id, 'leave_rejected', { leave_id: id });
     res.json({ message: 'Leave rejected' });
   } catch (error) {
+    console.error('Reject leave error:', error);
     res.status(500).json({ error: 'Failed to reject leave' });
   }
 }
@@ -799,7 +843,7 @@ export async function approveAttendanceCorrection(req, res) {
 
     // Get correction details
     const [corrections] = await db.execute(
-      'SELECT attendance_id, correction_type FROM attendance_corrections WHERE id = ? AND status = ?',
+      'SELECT attendance_id, correction_type, user_id FROM attendance_corrections WHERE id = ? AND status = ?',
       [id, 'pending']
     );
 
@@ -813,10 +857,12 @@ export async function approveAttendanceCorrection(req, res) {
     if (correction.correction_type === 'status_change') {
       // This would need additional data from request body
       const { new_status } = req.body;
-      await db.execute(
-        'UPDATE attendance SET status = ? WHERE id = ?',
-        [new_status, correction.attendance_id]
-      );
+      if (new_status) {
+        await db.execute(
+          'UPDATE attendance SET status = ? WHERE id = ?',
+          [new_status, correction.attendance_id]
+        );
+      }
     }
 
     // Update correction status
@@ -825,9 +871,15 @@ export async function approveAttendanceCorrection(req, res) {
       ['approved', req.user.id, id]
     );
 
+    await createNotification(
+      correction.user_id,
+      'Your attendance correction request has been approved.'
+    );
+
     await logAudit(req.user.id, 'attendance_correction_approved', { correction_id: id });
     res.json({ message: 'Attendance correction approved' });
   } catch (error) {
+    console.error('Approve correction error:', error);
     res.status(500).json({ error: 'Failed to approve attendance correction' });
   }
 }
@@ -835,14 +887,29 @@ export async function approveAttendanceCorrection(req, res) {
 export async function rejectAttendanceCorrection(req, res) {
   try {
     const { id } = req.params;
+
+    // Get user_id for notification
+    const [corrections] = await db.execute(
+      'SELECT user_id FROM attendance_corrections WHERE id = ?',
+      [id]
+    );
+
     await db.execute(
       'UPDATE attendance_corrections SET status = ?, reviewed_by = ? WHERE id = ?',
       ['rejected', req.user.id, id]
     );
 
+    if (corrections.length > 0) {
+      await createNotification(
+        corrections[0].user_id,
+        'Your attendance correction request has been rejected.'
+      );
+    }
+
     await logAudit(req.user.id, 'attendance_correction_rejected', { correction_id: id });
     res.json({ message: 'Attendance correction rejected' });
   } catch (error) {
+    console.error('Reject correction error:', error);
     res.status(500).json({ error: 'Failed to reject attendance correction' });
   }
 }
@@ -898,14 +965,29 @@ export async function approveOvertime(req, res) {
 export async function rejectOvertime(req, res) {
   try {
     const { id } = req.params;
+
+    // Get user_id for notification
+    const [overtime] = await db.execute(
+      'SELECT user_id, work_date, hours FROM overtimes WHERE id = ?',
+      [id]
+    );
+
     await db.execute(
       'UPDATE overtimes SET status = ? WHERE id = ?',
       ['rejected', id]
     );
 
+    if (overtime.length > 0) {
+      await createNotification(
+        overtime[0].user_id,
+        `Your overtime request for ${overtime[0].work_date} (${overtime[0].hours} hours) has been rejected.`
+      );
+    }
+
     await logAudit(req.user.id, 'overtime_rejected', { overtime_id: id });
     res.json({ message: 'Overtime rejected' });
   } catch (error) {
+    console.error('Reject overtime error:', error);
     res.status(500).json({ error: 'Failed to reject overtime' });
   }
 }
