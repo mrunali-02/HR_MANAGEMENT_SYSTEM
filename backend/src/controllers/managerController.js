@@ -4,6 +4,9 @@ import db from '../db/db.js';
 /* ============================
    MANAGER PROFILE
    ============================ */
+/* ============================
+   MANAGER PROFILE
+   ============================ */
 export async function getManagerProfile(req, res) {
   try {
     const managerId = parseInt(req.params.id, 10);
@@ -14,38 +17,97 @@ export async function getManagerProfile(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const [rows] = await db.execute(
-      `
-      SELECT 
-        e.id,
-        e.email,
-        e.name,
-        e.role,
-        e.department,
-        e.phone,
-        e.joined_on,
-        e.photo_url,
-        e.address,
-        p.display_name,
-        p.bio
-      FROM employees e
-      LEFT JOIN profiles p ON e.id = p.user_id
-      WHERE e.id = ?
-      `,
+    // 1. Fetch Basic User Details
+    const userPromise = db.execute(
+      `SELECT e.id, e.email, e.name, e.role, e.department, e.phone, e.joined_on, e.photo_url, e.address, 
+              p.display_name, p.bio
+       FROM employees e
+       LEFT JOIN profiles p ON e.id = p.user_id
+       WHERE e.id = ?`,
       [managerId]
     );
 
-    if (rows.length === 0) {
+    // 2. Fetch Team Members List
+    const teamPromise = db.execute(
+      `SELECT id, name, email, role, department, photo_url 
+       FROM employees 
+       WHERE manager_id = ?`,
+      [managerId]
+    );
+
+    // 3. Fetch Leave Stats (Pending, Approved, Rejected)
+    const leaveStatsPromise = db.execute(
+      `SELECT 
+         SUM(CASE WHEN lr.status = 'pending' THEN 1 ELSE 0 END) as pendingCount,
+         SUM(CASE WHEN lr.status = 'approved' THEN 1 ELSE 0 END) as approvedCount,
+         SUM(CASE WHEN lr.status = 'rejected' THEN 1 ELSE 0 END) as rejectedCount
+       FROM leave_requests lr
+       JOIN employees e ON lr.user_id = e.id
+       WHERE e.manager_id = ?`,
+      [managerId]
+    );
+
+    // 4. Fetch Own Work Hours (Current Month)
+    const workHoursPromise = db.execute(
+      `SELECT 
+         SUM(TIMESTAMPDIFF(HOUR, check_in_time, check_out_time)) as monthHours
+       FROM attendance
+       WHERE user_id = ? 
+         AND MONTH(attendance_date) = MONTH(CURRENT_DATE())
+         AND YEAR(attendance_date) = YEAR(CURRENT_DATE())`,
+      [managerId]
+    );
+
+    // 5. Fetch Own Attendance Status (Today)
+    const todayStatusPromise = db.execute(
+      `SELECT status, check_in_time, check_out_time 
+       FROM attendance 
+       WHERE user_id = ? AND attendance_date = CURDATE()`,
+      [managerId]
+    );
+
+    const [[userRows], [teamRows], [[leaveStats]], [[workHours]], [[todayStats]]] = await Promise.all([
+      userPromise,
+      teamPromise,
+      leaveStatsPromise,
+      workHoursPromise,
+      todayStatusPromise
+    ]);
+
+    if (userRows.length === 0) {
       return res.status(404).json({ error: 'Manager not found' });
     }
 
+    const user = userRows[0];
+
+    // Construct Response
     res.json({
-      user: rows[0],
-      profile: rows[0].display_name || rows[0].bio ? {
-        display_name: rows[0].display_name,
-        bio: rows[0].bio
-      } : null
+      user: {
+        ...user,
+        reporting_authority: 'HR Admin' // Placeholder or fetch actual
+      },
+      profile: user.display_name || user.bio ? {
+        display_name: user.display_name,
+        bio: user.bio
+      } : null,
+      team: {
+        members: teamRows,
+        count: teamRows.length
+      },
+      stats: {
+        leaves: {
+          pending: leaveStats.pendingCount || 0,
+          approved: leaveStats.approvedCount || 0,
+          rejected: leaveStats.rejectedCount || 0
+        },
+        work: {
+          month_hours: workHours.monthHours || 0,
+          today_status: todayStats ? todayStats.status : 'Not Marked',
+          today_check_in: todayStats ? todayStats.check_in_time : null
+        }
+      }
     });
+
   } catch (error) {
     console.error('getManagerProfile error:', error);
     res.status(500).json({ error: 'Failed to fetch manager profile' });
@@ -217,8 +279,7 @@ export async function getTeamLeaveRequests(req, res) {
         lr.type,
         DATE_FORMAT(lr.start_date, '%Y-%m-%d') AS start_date,
         DATE_FORMAT(lr.end_date, '%Y-%m-%d') AS end_date,
-        lr.days,
-        lr.document_url,
+        DATEDIFF(lr.end_date, lr.start_date) + 1 AS days,
         lr.reason,
         lr.status,
         lr.created_at,

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
@@ -32,7 +33,13 @@ function ManagerDashboard() {
   const [teamAttendance, setTeamAttendance] = useState([]);
   const [teamWorkHours, setTeamWorkHours] = useState([]);
   const [teamLeaves, setTeamLeaves] = useState([]);
-  const [teamStats, setTeamStats] = useState(null);
+  const [teamStats, setTeamStats] = useState(null); // { teamSize, avgHoursPerDay, totalLeaves }
+  const [managerProfile, setManagerProfile] = useState(null);
+
+  // Password Change State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordStatus, setPasswordStatus] = useState({ loading: false, error: '', success: '' }); // New Enhanced Profile Data
 
   // My Calendar & Attendance
   const [holidays, setHolidays] = useState([]);
@@ -68,28 +75,20 @@ function ManagerDashboard() {
     setError('');
 
     try {
-      // 1) Manager profile (existing API)
+      // 1) Manager profile (Enhanced)
       const profileRes = await axios.get(`${API_BASE_URL}/manager/${id}`, {
         headers: getAuthHeader(),
       });
-      setProfile(profileRes.data);
+      setManagerProfile(profileRes.data); // Use new state variable
+      setProfile(profileRes.data); // Keep old one for safety if utilized elsewhere
 
-      // 2) Team data – TODO: wire these routes on backend
-      // For now, we'll keep safe fallbacks if these endpoints don't exist.
+      // 2) Team data
       try {
         const [attendanceRes, workRes, leavesRes, statsRes] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/manager/team/attendance`, {
-            headers: getAuthHeader(),
-          }),
-          axios.get(`${API_BASE_URL}/manager/team/work-hours`, {
-            headers: getAuthHeader(),
-          }),
-          axios.get(`${API_BASE_URL}/manager/team/leave-requests`, {
-            headers: getAuthHeader(),
-          }),
-          axios.get(`${API_BASE_URL}/manager/team/stats`, {
-            headers: getAuthHeader(),
-          }),
+          axios.get(`${API_BASE_URL}/manager/team/attendance`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/work-hours`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/leave-requests`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/stats`, { headers: getAuthHeader() }),
         ]);
 
         if (attendanceRes.status === 'fulfilled') {
@@ -105,7 +104,7 @@ function ManagerDashboard() {
         }
 
         if (leavesRes.status === 'fulfilled') {
-          setTeamLeaves(leavesRes.value.data.requests || leavesRes.value.data || []);
+          setTeamLeaves(leavesRes.value.data.requests || []);
         } else {
           setTeamLeaves([]);
         }
@@ -566,7 +565,80 @@ function ManagerDashboard() {
     );
   };
 
-  // REPORTS – Team-level statistics / export info
+  // ---------- CSV EXPORT LOGIC ----------
+  const downloadCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Extract headers
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','), // Header row
+      ...data.map(row => headers.map(fieldName => {
+        const value = row[fieldName];
+        // Handle strings with commas or newlines
+        if (typeof value === 'string' && (value.includes(',') || value.includes('\n'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleDownloadAttendance = () => {
+    const data = teamAttendance.map(a => ({
+      ID: a.id,
+      Date: a.date,
+      Name: a.employee_name,
+      Email: a.employee_email,
+      'Check In': a.check_in || '-',
+      'Check Out': a.check_out || '-',
+      Status: a.status
+    }));
+    downloadCSV(data, `Team_Attendance_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleDownloadLeaves = () => {
+    const data = teamLeaves.map(l => ({
+      ID: l.id,
+      Name: l.employee_name,
+      Email: l.employee_email,
+      Type: l.type,
+      'Start Date': l.start_date,
+      'End Date': l.end_date,
+      Days: l.days,
+      Reason: l.reason,
+      Status: l.status,
+      'Reviewed By': l.reviewed_by || '-'
+    }));
+    downloadCSV(data, `Team_Leaves_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleDownloadOvertime = () => {
+    // Filter for actual overtime or just dump work hours with overtime column
+    const data = teamWorkHours.map(w => ({
+      ID: w.id,
+      Date: w.date,
+      Name: w.employee_name,
+      'Total Hours': w.hours,
+      'Overtime Hours': w.overtime_hours
+    }));
+    downloadCSV(data, `Team_Overtime_WorkHours_${new Date().toISOString().split('T')[0]}.csv`);
+  };
   const renderReports = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Team Reports</h2>
@@ -600,21 +672,109 @@ function ManagerDashboard() {
         )}
       </div>
 
+      {/* ANALYTICS CHARTS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* LEAVE ANALYTICS */}
+        <div className="bg-white shadow rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Leave Request Distribution</h3>
+          {teamLeaves.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Pending', value: teamLeaves.filter(l => l.status === 'pending').length },
+                      { name: 'Approved', value: teamLeaves.filter(l => l.status === 'approved').length },
+                      { name: 'Rejected', value: teamLeaves.filter(l => l.status === 'rejected').length },
+                    ].filter(i => i.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label
+                  >
+                    <Cell fill="#EAB308" /> {/* Pending - Yellow */}
+                    <Cell fill="#22C55E" /> {/* Approved - Green */}
+                    <Cell fill="#EF4444" /> {/* Rejected - Red */}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm text-center py-10">No leave data available for analytics.</p>
+          )}
+        </div>
+
+        {/* ATTENDANCE ANALYTICS (Recent) */}
+        <div className="bg-white shadow rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance Overview (Last 30 records)</h3>
+          {teamAttendance.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Present', value: teamAttendance.filter(a => a.status === 'present').length },
+                      { name: 'Absent', value: teamAttendance.filter(a => a.status === 'absent').length },
+                      { name: 'On Leave', value: teamAttendance.filter(a => a.status === 'on_leave').length },
+                      { name: 'Remote', value: teamAttendance.filter(a => a.status === 'remote').length },
+                    ].filter(i => i.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#82ca9d"
+                    dataKey="value"
+                    label
+                  >
+                    <Cell fill="#22C55E" /> {/* Present - Green */}
+                    <Cell fill="#EF4444" /> {/* Absent - Red */}
+                    <Cell fill="#3B82F6" /> {/* On Leave - Blue */}
+                    <Cell fill="#A855F7" /> {/* Remote - Purple */}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm text-center py-10">No attendance data available for analytics.</p>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white shadow rounded-lg p-4 space-y-3">
         <h3 className="text-lg font-semibold text-gray-900">
           Export Team Reports
         </h3>
         <p className="text-sm text-gray-500">
-          As per your module summary, you can export **team-level** reports.
-          Admin controls global exports and enabling/disabling this feature.
+          Download team data in CSV format.
         </p>
-        <button
-          type="button"
-          onClick={() => alert('TODO: implement team report export API')}
-          className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
-        >
-          Export Team Report (coming soon)
-        </button>
+        <div className="flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={handleDownloadAttendance}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 shadow-sm"
+          >
+            📥 Download Attendance Report
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadLeaves}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 shadow-sm"
+          >
+            📥 Download Leave Report
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadOvertime}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 shadow-sm"
+          >
+            📥 Download Overtime Report
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -663,54 +823,290 @@ function ManagerDashboard() {
     </div>
   );
 
-  // PROFILE – self-profile display (no edits; admin controls employee management)
-  const renderProfile = () => (
-    <div className="space-y-6 max-w-xl">
-      <h2 className="text-2xl font-bold text-gray-900">Profile</h2>
-      <div className="bg-white shadow rounded-lg p-6 space-y-4">
-        <div>
-          <p className="text-xs text-gray-500 uppercase mb-1">Name</p>
-          <p className="text-base text-gray-900">
-            {managerUser?.name || 'Not set'}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 uppercase mb-1">Email</p>
-          <p className="text-base text-gray-900">{managerUser?.email}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 uppercase mb-1">Role</p>
-          <p className="text-base text-gray-900 capitalize">
-            {managerUser?.role}
-          </p>
-        </div>
 
-        {profile?.profile && (
-          <>
-            <div>
-              <p className="text-xs text-gray-500 uppercase mb-1">
-                Display Name
-              </p>
-              <p className="text-base text-gray-900">
-                {profile.profile.display_name || 'Not set'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase mb-1">Bio</p>
-              <p className="text-base text-gray-900">
-                {profile.profile.bio || 'Not set'}
-              </p>
-            </div>
-          </>
-        )}
 
-        <p className="text-xs text-gray-500">
-          Employee Management changes (email, role, etc.) are controlled by the
-          Admin module.
-        </p>
+  // ---------- PASSWORD CHANGE HANDLERS ----------
+  const handlePasswordChange = (e) => {
+    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordStatus({ loading: false, error: 'New passwords do not match', success: '' });
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      setPasswordStatus({ loading: false, error: 'Password must be at least 6 characters', success: '' });
+      return;
+    }
+
+    setPasswordStatus({ loading: true, error: '', success: '' });
+
+    try {
+      await axios.put(
+        `${API_BASE_URL}/employee/${user.id}/change-password`,
+        {
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword
+        },
+        { headers: getAuthHeader() }
+      );
+      setPasswordStatus({ loading: false, error: '', success: 'Password changed successfully!' });
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setPasswordStatus({ loading: false, error: '', success: '' });
+      }, 1500);
+    } catch (err) {
+      setPasswordStatus({
+        loading: false,
+        error: err.response?.data?.error || 'Failed to change password',
+        success: ''
+      });
+    }
+  };
+
+  const renderChangePasswordModal = () => {
+    if (!showPasswordModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+            <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
+            <button
+              onClick={() => setShowPasswordModal(false)}
+              className="text-gray-400 hover:text-gray-500 text-2xl"
+            >
+              &times;
+            </button>
+          </div>
+
+          <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
+            {passwordStatus.error && (
+              <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                {passwordStatus.error}
+              </div>
+            )}
+            {passwordStatus.success && (
+              <div className="p-3 bg-green-50 text-green-700 rounded-md text-sm border border-green-200">
+                {passwordStatus.success}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+              <input
+                type="password"
+                name="currentPassword"
+                value={passwordData.currentPassword}
+                onChange={handlePasswordChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input
+                type="password"
+                name="newPassword"
+                value={passwordData.newPassword}
+                onChange={handlePasswordChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={passwordData.confirmPassword}
+                onChange={handlePasswordChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={passwordStatus.loading}
+                className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
+                  ${passwordStatus.loading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+              >
+                {passwordStatus.loading ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // PROFILE – Enhanced Manager Profile Section
+  const renderProfile = () => {
+    if (!managerUser) return <p>Loading profile...</p>;
+
+    // Use fetched profile data if available, fallback to basic managerUser
+    const user = managerProfile?.user || managerUser;
+    const team = managerProfile?.team || { members: [], count: 0 };
+    const stats = managerProfile?.stats || { leaves: {}, work: {} };
+
+    return (
+      <div className="space-y-8 max-w-5xl mx-auto">
+        <h2 className="text-3xl font-bold text-gray-900 border-b pb-4">My Profile & Dashboard</h2>
+
+        {/* 1. Personal & Role Details */}
+        <div className="bg-white shadow-lg rounded-xl overflow-hidden">
+          <div className="px-6 py-4 bg-indigo-600">
+            <h3 className="text-lg font-semibold text-white">Personal & Role Information</h3>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-start space-x-4">
+              <div className="h-24 w-24 bg-gray-200 rounded-full flex items-center justify-center text-3xl overflow-hidden border-4 border-white shadow-md">
+                {user.photo_url ? (
+                  <img src={user.photo_url} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <span>👤</span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xl font-bold text-gray-900">{user.name}</p>
+                <p className="text-sm text-gray-500">ID: {user.id}</p>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                  {user.role?.toUpperCase()}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-gray-500 font-medium">Email:</span>
+                <span className="col-span-2 text-gray-900">{user.email}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-gray-500 font-medium">Phone:</span>
+                <span className="col-span-2 text-gray-900">{user.phone || 'Not set'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-gray-500 font-medium">Department:</span>
+                <span className="col-span-2 text-gray-900">{user.department || 'General'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-gray-500 font-medium">Reporting To:</span>
+                <span className="col-span-2 text-gray-900">{user.reporting_authority || 'HR Admin'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* 3. Team Information */}
+          <div className="bg-white shadow-lg rounded-xl overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-gray-50 border-b flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">My Team</h3>
+              <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">{team.count} Members</span>
+            </div>
+            <div className="p-0 flex-1 overflow-y-auto max-h-64">
+              {team.members.length > 0 ? (
+                <ul className="divide-y divide-gray-100">
+                  {team.members.map((member) => (
+                    <li key={member.id} className="px-6 py-3 hover:bg-gray-50 flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center text-xs">
+                        {member.photo_url ? <img src={member.photo_url} alt="" className="h-full w-full rounded-full" /> : member.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{member.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {member.role ? member.role.toUpperCase() : 'EMPLOYEE'}
+                          {member.department && ` • ${member.department}`}
+                        </p>
+                        <p className="text-xs text-gray-400">{member.email}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-6 text-sm text-gray-500 text-center">No team members assigned.</p>
+              )}
+            </div>
+          </div>
+
+          {/* 4 & 5. Stats Overview */}
+          <div className="space-y-6">
+            {/* Leave Overview */}
+            <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Leave & Approval Overview</h3>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-2xl font-bold text-yellow-600">{stats.leaves.pending || 0}</p>
+                  <p className="text-xs text-yellow-700 font-medium uppercase mt-1">Pending</p>
+                </div>
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{stats.leaves.approved || 0}</p>
+                  <p className="text-xs text-green-700 font-medium uppercase mt-1">Approved</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <p className="text-2xl font-bold text-red-600">{stats.leaves.rejected || 0}</p>
+                  <p className="text-xs text-red-700 font-medium uppercase mt-1">Rejected</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Attendance & Work Summary */}
+            <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">My Work Summary</h3>
+              <div className="flex items-center justify-between border-b pb-4 mb-4">
+                <span className="text-sm text-gray-500">Today's Status</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${stats.work.today_status === 'present' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {stats.work.today_status?.toUpperCase() || 'NOT MARKED'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">Monthly Hours</span>
+                <span className="text-xl font-bold text-indigo-600">{stats.work.month_hours || 0} hrs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 6. Account Settings */}
+        <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Account Settings</h3>
+              <p className="text-sm text-gray-500">Manage your password and session.</p>
+            </div>
+            <div className="space-x-4">
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Change Password
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ---------- MAIN LAYOUT (same shell as Admin) ----------
 
@@ -836,6 +1232,7 @@ function ManagerDashboard() {
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.PROFILE && renderProfile()}
         </main>
+        {renderChangePasswordModal()}
       </div>
     </div>
   );
