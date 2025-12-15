@@ -2,7 +2,7 @@ import db from '../db/db.js';
 import { logAudit, createNotification } from '../utils/audit.js';
 
 const isSelfOrAdmin = (reqUser, targetUserId) =>
-  reqUser.role === 'admin' || reqUser.id === targetUserId;
+  reqUser.role === 'admin' || reqUser.id == targetUserId;
 
 const formatTime = (timeValue) => {
   if (!timeValue) return null;
@@ -332,6 +332,7 @@ export async function getLeaveHistory(req, res) {
 
 export async function createLeaveRequest(req, res) {
   try {
+    console.log('Creating leave request. Params:', req.params, 'Body:', req.body, 'File:', req.file);
     const userId = parseInt(req.params.id, 10);
     if (!isSelfOrAdmin(req.user, userId)) {
       return res.status(403).json({ error: 'Access denied' });
