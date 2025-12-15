@@ -20,7 +20,7 @@ export async function getDashboardSummary(req, res) {
       SELECT
         (SELECT COUNT(*) FROM employees) AS totalEmployees,
         (SELECT COUNT(*) FROM employees WHERE status = 'active') AS activeEmployees,
-        (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS pendingLeaveRequests,
+        (SELECT COUNT(*) FROM leave_requests lr JOIN employees e ON lr.user_id = e.id WHERE lr.status = 'pending' AND (${req.user.role === 'admin' ? '1=1' : "e.role IN ('manager', 'employee')"})) AS pendingLeaveRequests,
         (SELECT COUNT(*) FROM attendance_corrections WHERE status = 'pending') AS pendingAttendanceCorrections,
         (SELECT COUNT(*) FROM overtimes WHERE status = 'pending') AS pendingOvertimeRequests,
         (SELECT COUNT(*) FROM employees WHERE role='manager') AS totalManagers,
@@ -752,7 +752,7 @@ export async function deleteDepartment(req, res) {
 export async function getHolidays(req, res) {
   try {
     const [holidays] = await db.execute(
-      'SELECT id, name, holiday_date, description, created_at FROM holidays ORDER BY holiday_date ASC'
+      'SELECT id, name, date, description, created_at FROM holidays ORDER BY date ASC'
     );
     res.json({ holidays });
   } catch (error) {
@@ -762,19 +762,19 @@ export async function getHolidays(req, res) {
 
 export async function createHoliday(req, res) {
   try {
-    const { name, holiday_date, description } = req.body;
-    if (!name || !holiday_date) {
+    const { name, date, description } = req.body;
+    if (!name || !date) {
       return res.status(400).json({ error: 'Holiday name and date are required' });
     }
 
     const [result] = await db.execute(
-      'INSERT INTO holidays (name, holiday_date, description) VALUES (?, ?, ?)',
-      [name, holiday_date, description || null]
+      'INSERT INTO holidays (name, date, description) VALUES (?, ?, ?)',
+      [name, date, description || null]
     );
 
-    await logAudit(req.user.id, 'holiday_created', { holiday_id: result.insertId, name, date: holiday_date });
-    await createNotification(null, `New holiday added: ${name} on ${holiday_date} `);
-    res.status(201).json({ id: result.insertId, name, holiday_date, description });
+    await logAudit(req.user.id, 'holiday_created', { holiday_id: result.insertId, name, date: date });
+    await createNotification(null, `New holiday added: ${name} on ${date} `);
+    res.status(201).json({ id: result.insertId, name, date, description });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Holiday for this date already exists' });
@@ -786,11 +786,11 @@ export async function createHoliday(req, res) {
 export async function updateHoliday(req, res) {
   try {
     const { id } = req.params;
-    const { name, holiday_date, description } = req.body;
+    const { name, date, description } = req.body;
 
     await db.execute(
-      'UPDATE holidays SET name = ?, holiday_date = ?, description = ? WHERE id = ?',
-      [name, holiday_date, description || null, id]
+      'UPDATE holidays SET name = ?, date = ?, description = ? WHERE id = ?',
+      [name, date, description || null, id]
     );
 
     await logAudit(req.user.id, 'holiday_updated', { holiday_id: id, name });

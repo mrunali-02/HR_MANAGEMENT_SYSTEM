@@ -137,10 +137,10 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS holidays (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        holiday_date DATE NOT NULL,
+        date DATE NOT NULL,
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_holiday (holiday_date)
+        UNIQUE KEY unique_holiday (date)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created holidays table');

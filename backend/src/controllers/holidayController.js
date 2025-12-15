@@ -2,7 +2,7 @@ import db from '../db/db.js';
 
 export async function getHolidays(req, res) {
     try {
-        const [holidays] = await db.execute('SELECT * FROM holidays ORDER BY holiday_date ASC');
+        const [holidays] = await db.execute('SELECT * FROM holidays ORDER BY date ASC');
         res.json({ holidays });
     } catch (error) {
         console.error('Get holidays error:', error);

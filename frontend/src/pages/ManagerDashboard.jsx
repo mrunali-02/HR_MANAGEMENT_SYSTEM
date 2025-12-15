@@ -15,6 +15,7 @@ const TABS = {
   ATTENDANCE: 'attendance',
   WORK_HOURS: 'workHours',
   LEAVES: 'leaves',
+  APPLY_LEAVE: 'applyLeave',
   CALENDAR: 'calendar',
   REPORTS: 'reports',
   PROFILE: 'profile',
@@ -28,6 +29,18 @@ function ManagerDashboard() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // My Leave Application State
+  const [myLeaveHistory, setMyLeaveHistory] = useState([]);
+  const [myLeaveForm, setMyLeaveForm] = useState({
+    type: 'sick',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    document: null
+  });
+  const [myLeaveSubmitting, setMyLeaveSubmitting] = useState(false);
 
   // Manager-specific data
   const [teamAttendance, setTeamAttendance] = useState([]);
@@ -117,11 +130,12 @@ function ManagerDashboard() {
       } catch (innerErr) {
         console.error('Manager team data error:', innerErr);
       }
-      // 3) Holidays & My Attendance [NEW]
+      // 3) Holidays & My Attendance & My Leaves [NEW]
       try {
-        const [holidayRes, myAttRes] = await Promise.all([
+        const [holidayRes, myAttRes, myLeavesRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/holidays`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: getAuthHeader() }) // Managers are also employees
+          axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/employee/${id}/leaves`, { headers: getAuthHeader() })
         ]);
         setHolidays(holidayRes.data.holidays || []);
 
@@ -130,8 +144,10 @@ function ManagerDashboard() {
         setAttendanceMarked(myAttRes.data.today?.status === 'present');
         setCheckoutMarked(!!myAttRes.data.today?.check_out);
 
+        setMyLeaveHistory(myLeavesRes.data.leaves || myLeavesRes.data || []);
+
       } catch (err) {
-        console.error('Error fetching calendar data:', err);
+        console.error('Error fetching calendar/leave data:', err);
       }
 
     } catch (err) {
@@ -142,6 +158,15 @@ function ManagerDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMyLeaves = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/employee/${id}/leaves`, { headers: getAuthHeader() });
+      setMyLeaveHistory(response.data.leaves || response.data || []);
+    } catch (err) {
+      console.error('Error fetching my leaves:', err);
     }
   };
 
@@ -598,6 +623,169 @@ function ManagerDashboard() {
       document.body.removeChild(link);
     }
   };
+
+  // ---------- MY LEAVE HANDLERS (Same as HR/Employee) ----------
+
+  const handleMyLeaveFormChange = (field, value) => {
+    if (field === 'startDate' || field === 'endDate') {
+      const isHoliday = holidays.some(h => {
+        let hDate = h.date;
+        if (typeof h.date === 'string') {
+          const d = new Date(h.date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          hDate = `${year}-${month}-${day}`;
+        }
+        return hDate === value;
+      });
+      if (isHoliday) {
+        alert('Selected date is a holiday.');
+        return;
+      }
+    }
+    if (field === 'type' && ['casual', 'paid'].includes(value)) {
+      setMyLeaveForm(prev => ({ ...prev, [field]: value, document: null }));
+      return;
+    }
+    setMyLeaveForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyMyLeave = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    if (!myLeaveForm.startDate || !myLeaveForm.endDate || !myLeaveForm.reason) {
+      setError('Please fill all leave fields.');
+      return;
+    }
+    setMyLeaveSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('type', myLeaveForm.type);
+      formData.append('start_date', myLeaveForm.startDate);
+      formData.append('end_date', myLeaveForm.endDate);
+      formData.append('reason', myLeaveForm.reason);
+      if (myLeaveForm.document) formData.append('document', myLeaveForm.document);
+
+      await axios.post(`${API_BASE_URL}/employee/${id}/leaves`, formData, {
+        headers: {
+          ...getAuthHeader(),
+          'Content-Type': 'multipart/form-data'
+        },
+      });
+      setSuccess('Leave request submitted successfully!');
+      setMyLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '', document: null });
+      fetchMyLeaves();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to apply leave');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setMyLeaveSubmitting(false);
+    }
+  };
+
+  const handleCancelMyLeave = async (leaveId) => {
+    if (!window.confirm('Cancel this leave request?')) return;
+    try {
+      await axios.put(`${API_BASE_URL}/employee/${id}/leaves/${leaveId}/cancel`, {}, { headers: getAuthHeader() });
+      setSuccess('Cancelled successfully!');
+      fetchMyLeaves();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to cancel');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  const renderApplyLeave = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Apply for Compenstation/Leave</h2>
+      <p className="text-sm text-gray-500">
+        Applications here are visible to HR/Admin. You can view status below.
+        (For <span className="font-bold">Team Leaves</span>, check the "Leave Requests" tab).
+      </p>
+
+      {/* Re-using dashboard error/success if visible there, but here we likely need local ones or ensure global are displayed */}
+      {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded">{error}</div>}
+      {success && <div className="bg-green-50 text-green-700 px-4 py-3 rounded">{success}</div>}
+
+      <div className="bg-white p-6 rounded-xl shadow-sm">
+        <form onSubmit={handleApplyMyLeave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Leave Type</label>
+            <select value={myLeaveForm.type} onChange={e => handleMyLeaveFormChange('type', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+              <option value="sick">Sick Leave</option>
+              <option value="casual">Casual Leave</option>
+              <option value="paid">Planned Leave</option>
+            </select>
+          </div>
+
+          <div />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Start Date</label>
+            <input type="date" value={myLeaveForm.startDate} onChange={e => handleMyLeaveFormChange('startDate', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <input type="date" min={myLeaveForm.startDate} value={myLeaveForm.endDate} onChange={e => handleMyLeaveFormChange('endDate', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Reason</label>
+            <textarea rows="2" value={myLeaveForm.reason} onChange={e => handleMyLeaveFormChange('reason', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" placeholder="Reason for leave..." />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Document {['casual', 'paid'].includes(myLeaveForm.type) ? '(Not Required)' : '(Optional)'}
+            </label>
+            <input
+              type="file"
+              disabled={['casual', 'paid'].includes(myLeaveForm.type)}
+              onChange={e => handleMyLeaveFormChange('document', e.target.files[0])}
+              className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <button type="submit" disabled={myLeaveSubmitting} className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+              {myLeaveSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm">
+        <h3 className="text-lg font-bold mb-4">My Leave History</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {myLeaveHistory.length === 0 && <tr><td colSpan="4" className="px-4 py-4 text-center text-gray-500">No leaves found.</td></tr>}
+              {myLeaveHistory.map(l => (
+                <tr key={l.id}>
+                  <td className="px-4 py-2 capitalize">{l.type}</td>
+                  <td className="px-4 py-2">{l.start_date} to {l.end_date} <span className="text-gray-400 text-xs ml-1">({l.days} days)</span></td>
+                  <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs font-bold ${l.status === 'approved' ? 'bg-green-100 text-green-800' : l.status === 'rejected' ? 'bg-red-100 text-red-800' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}>{l.status}</span></td>
+                  <td className="px-4 py-2">{l.status === 'pending' && <button onClick={() => handleCancelMyLeave(l.id)} className="text-red-600 text-sm hover:underline">Cancel</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
   const handleDownloadAttendance = () => {
     const data = teamAttendance.map(a => ({
@@ -1158,6 +1346,15 @@ function ManagerDashboard() {
             Leave Requests
           </button>
           <button
+            onClick={() => setActiveTab(TABS.APPLY_LEAVE)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.APPLY_LEAVE
+              ? 'bg-slate-800 text-white'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+          >
+            Apply Leave
+          </button>
+          <button
             onClick={() => setActiveTab(TABS.CALENDAR)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
               ? 'bg-slate-800 text-white'
@@ -1206,6 +1403,7 @@ function ManagerDashboard() {
               {activeTab === TABS.ATTENDANCE && 'Team Attendance'}
               {activeTab === TABS.WORK_HOURS && 'Work Hours'}
               {activeTab === TABS.LEAVES && 'Team Leave Requests'}
+              {activeTab === TABS.APPLY_LEAVE && 'Apply Leave'}
               {activeTab === TABS.REPORTS && 'Team Reports'}
               {activeTab === TABS.PROFILE && 'Profile'}
             </h1>
@@ -1228,6 +1426,7 @@ function ManagerDashboard() {
           {activeTab === TABS.ATTENDANCE && renderAttendance()}
           {activeTab === TABS.WORK_HOURS && renderWorkHours()}
           {activeTab === TABS.LEAVES && renderLeaves()}
+          {activeTab === TABS.APPLY_LEAVE && renderApplyLeave()}
           {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.PROFILE && renderProfile()}
