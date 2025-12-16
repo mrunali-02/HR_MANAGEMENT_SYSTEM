@@ -506,7 +506,9 @@ function HrDashboard() {
       return;
     }
 
-    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    const confirmCheckIn = window.confirm(
+      'This will capture your current location for attendance. Proceed?'
+    );
     if (!confirmCheckIn) return;
 
     setSuccess('Fetching location...');
@@ -517,7 +519,8 @@ function HrDashboard() {
           const { latitude, longitude, accuracy } = position.coords;
           const token = localStorage.getItem('token');
 
-          await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`,
+          await axios.post(
+            `${API_BASE_URL}/employee/${user.id}/attendance/mark`,
             { latitude, longitude, accuracy },
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -527,17 +530,26 @@ function HrDashboard() {
           setTimeout(() => setSuccess(''), 3000);
         } catch (err) {
           console.error('Error marking attendance:', err);
-          let errorMsg = err.response?.data?.error || 'Failed to check-in';
+
+          let errorMsg = err.response?.data?.error || 'Check-in failed';
+
+          // If already marked, sync UI
+          if (errorMsg.includes('already')) {
+            fetchMyAttendance();
+          }
+
           if (err.response?.data?.distance) {
             errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
           }
+
           setError(errorMsg);
-          if (success === 'Fetching location...') setSuccess('');
+          setSuccess('');
           setTimeout(() => setError(''), 5000);
         }
       },
       (geoError) => {
         console.error('Geolocation error:', geoError);
+
         let msg = 'Unable to retrieve location.';
         if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
         else if (geoError.code === 2) msg = 'Location unavailable.';
@@ -562,10 +574,12 @@ function HrDashboard() {
       return;
     }
 
-    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
+    const confirmCheckout = window.confirm(
+      'This will capture your current location for checkout. Proceed?'
+    );
     if (!confirmCheckout) return;
 
-    setSuccess('Fetching location...');
+    setSuccess('Fetching location for checkout...');
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -573,7 +587,8 @@ function HrDashboard() {
           const { latitude, longitude, accuracy } = position.coords;
           const token = localStorage.getItem('token');
 
-          const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
+          const res = await axios.post(
+            `${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
             { latitude, longitude, accuracy },
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -584,17 +599,21 @@ function HrDashboard() {
           setTimeout(() => setSuccess(''), 3000);
         } catch (err) {
           console.error('Error checking out:', err);
-          let errorMsg = err.response?.data?.error || 'Failed to check-out';
+
+          let errorMsg = err.response?.data?.error || 'Checkout failed';
+
           if (err.response?.data?.distance) {
             errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
           }
+
           setError(errorMsg);
-          if (success === 'Fetching location...') setSuccess('');
+          setSuccess('');
           setTimeout(() => setError(''), 5000);
         }
       },
       (geoError) => {
         console.error('Geolocation error:', geoError);
+
         let msg = 'Unable to retrieve location.';
         if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
         else if (geoError.code === 2) msg = 'Location unavailable.';
@@ -604,7 +623,7 @@ function HrDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -822,22 +841,17 @@ function HrDashboard() {
             >
               {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
             </button>
-            {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
-              <button
-                onClick={handleCheckout}
-                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition"
-              >
-                Check Out
-              </button>
-            )}
-            {checkoutMarked && todayAttendance?.check_out && (
-              <button
-                disabled
-                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
-              >
-                ✓ Checked Out
-              </button>
-            )}
+
+            <button
+              onClick={handleCheckout}
+              disabled={!attendanceMarked || checkoutMarked}
+              className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${!attendanceMarked || checkoutMarked
+                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                }`}
+            >
+              {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
+            </button>
           </div>
         </div>
 

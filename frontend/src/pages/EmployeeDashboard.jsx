@@ -248,6 +248,21 @@ function EmployeeDashboard() {
           console.error('Error marking attendance:', err);
           let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
 
+          // Debug/Fix: If backend says "already marked", we might be out of sync. Refresh state.
+          if (errorMsg.includes('Attendance already marked')) {
+            try {
+              const token2 = localStorage.getItem('token');
+              const headers = { Authorization: `Bearer ${token2}` };
+              const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+              setAttendanceRecords(attRes.data.records || []);
+              setTodayAttendance(attRes.data.today || null);
+              setAttendanceMarked(attRes.data.today?.status === 'present');
+              setCheckoutMarked(!!attRes.data.today?.check_out);
+            } catch (refreshErr) {
+              console.error('Failed to sync state after error:', refreshErr);
+            }
+          }
+
           if (err.response?.data?.distance) {
             errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
           }
@@ -764,22 +779,17 @@ function EmployeeDashboard() {
                     >
                       {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
                     </button>
-                    {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
-                      <button
-                        onClick={handleCheckout}
-                        className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition"
-                      >
-                        Check Out
-                      </button>
-                    )}
-                    {checkoutMarked && todayAttendance?.check_out && (
-                      <button
-                        disabled
-                        className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
-                      >
-                        ✓ Checked Out
-                      </button>
-                    )}
+
+                    <button
+                      onClick={handleCheckout}
+                      disabled={!attendanceMarked || checkoutMarked}
+                      className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${!attendanceMarked || checkoutMarked
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                        }`}
+                    >
+                      {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
+                    </button>
                   </div>
                 </div>
 

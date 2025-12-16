@@ -218,10 +218,8 @@ export async function markAttendance(req, res) {
     }
 
     // 3. Geofence check
-    // Default office location (User provided) if not set in env
-    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '19.108273');
-    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '73.019769');
-    // Default to 20,000km to effectively disable geofence for testing if not set
+    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT);
+    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
     const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
 
     const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
@@ -374,7 +372,7 @@ export async function createLeaveRequest(req, res) {
     // Fetch overlapping holidays
     // Note: ensure date format matches DB or use comparison
     const [holidayRows] = await db.execute(
-      'SELECT COUNT(*) as count FROM holidays WHERE date BETWEEN ? AND ?',
+      'SELECT COUNT(*) as count FROM holidays WHERE holiday_date BETWEEN ? AND ?',
       [start_date, end_date]
     );
     const holidayCount = holidayRows[0].count;
@@ -733,8 +731,8 @@ export async function markCheckout(req, res) {
     }
 
     // 3. Geofence check
-    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '19.108273');
-    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '73.019769');
+    const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT);
+    const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
     const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
 
     const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
