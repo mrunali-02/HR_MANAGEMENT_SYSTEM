@@ -135,13 +135,16 @@ async function migrate() {
     // Create holidays table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS holidays (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        date DATE NOT NULL,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_holiday (date)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  date DATE NOT NULL,
+  created_by INT,
+  type VARCHAR(50) DEFAULT 'public',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_holiday (date),
+  INDEX idx_created_by (created_by)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
     `);
     console.log('✓ Created holidays table');
 
