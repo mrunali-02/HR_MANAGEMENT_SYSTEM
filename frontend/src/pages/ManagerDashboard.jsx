@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Bell } from 'lucide-react';
 import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
@@ -60,6 +61,22 @@ function ManagerDashboard() {
   const [myTodayAttendance, setMyTodayAttendance] = useState(null);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [checkoutMarked, setCheckoutMarked] = useState(false);
+
+  // Notifications
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Phone editing state
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [tempPhone, setTempPhone] = useState('');
+
+  // Address editing state
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [tempAddress, setTempAddress] = useState('');
+
+  // Emergency Contact editing state
+  const [isEditingEmergency, setIsEditingEmergency] = useState(false);
+  const [tempEmergency, setTempEmergency] = useState('');
 
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
 
@@ -132,6 +149,7 @@ function ManagerDashboard() {
       }
       // 3) Holidays & My Attendance & My Leaves [NEW]
       try {
+        fetchNotifications();
         const [holidayRes, myAttRes, myLeavesRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/holidays`, { headers: getAuthHeader() }),
           axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: getAuthHeader() }),
@@ -167,6 +185,15 @@ function ManagerDashboard() {
       setMyLeaveHistory(response.data.leaves || response.data || []);
     } catch (err) {
       console.error('Error fetching my leaves:', err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/employee/${id}/notifications`, { headers: getAuthHeader() });
+      setNotifications(res.data.notifications || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
     }
   };
 
@@ -228,40 +255,128 @@ function ManagerDashboard() {
   // Handlers for My Attendance
   const handleMarkMyAttendance = async () => {
     if (attendanceMarked || myTodayAttendance?.status === 'present') return;
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/employee/${id}/attendance/mark`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      alert('Checked in successfully!');
-      // Refresh
-      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
-      setMyAttendanceRecords(attRes.data.records || []);
-      setMyTodayAttendance(attRes.data.today || null);
-      setAttendanceMarked(attRes.data.today?.status === 'present');
-    } catch (err) {
-      console.error(err);
-      alert('Check-in failed');
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    if (!confirmCheckIn) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          await axios.post(`${API_BASE_URL}/employee/${id}/attendance/mark`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setSuccess('Checked in successfully!');
+          // Refresh
+          const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
+          setMyAttendanceRecords(attRes.data.records || []);
+          setMyTodayAttendance(attRes.data.today || null);
+          setAttendanceMarked(attRes.data.today?.status === 'present');
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error(err);
+          let errorMsg = err.response?.data?.error || 'Check-in failed';
+
+          // Debug/Fix: If backend says "already marked", we might be out of sync. Refresh state.
+          if (errorMsg.includes('Attendance already marked')) {
+            try {
+              const token = localStorage.getItem('token');
+              const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
+              setMyAttendanceRecords(attRes.data.records || []);
+              setMyTodayAttendance(attRes.data.today || null);
+              setAttendanceMarked(attRes.data.today?.status === 'present');
+            } catch (refreshErr) {
+              console.error('Failed to sync state after error:', refreshErr);
+            }
+          }
+
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location...') setSuccess('');
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleMyCheckout = async () => {
     if (!attendanceMarked || !myTodayAttendance?.check_in || checkoutMarked) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE_URL}/employee/${id}/attendance/checkout`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      alert(`Checked out! Work hours: ${res.data.total_hours}`);
-      // Refresh
-      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
-      setMyAttendanceRecords(attRes.data.records || []);
-      setMyTodayAttendance(attRes.data.today || null);
-      setCheckoutMarked(!!attRes.data.today?.check_out);
-    } catch (err) {
-      console.error(err);
-      alert('Checkout failed');
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
+    if (!confirmCheckout) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          const res = await axios.post(`${API_BASE_URL}/employee/${id}/attendance/checkout`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const hours = res.data.total_hours || '0';
+          setSuccess(`Checked out! Work hours: ${hours}`);
+
+          // Refresh
+          const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers: { Authorization: `Bearer ${token}` } });
+          setMyAttendanceRecords(attRes.data.records || []);
+          setMyTodayAttendance(attRes.data.today || null);
+          setCheckoutMarked(!!attRes.data.today?.check_out);
+          setTimeout(() => setSuccess(''), 5000);
+        } catch (err) {
+          console.error(err);
+          let errorMsg = err.response?.data?.error || 'Checkout failed';
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location...') setSuccess('');
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
 
@@ -287,27 +402,96 @@ function ManagerDashboard() {
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* My Attendance Card */}
+          <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-lg p-4 shadow flex flex-col justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide opacity-80 mb-1">My Status</p>
+              <div className="text-xl font-bold">
+                {myTodayAttendance?.status === 'present' ? 'Present' : 'Not Marked'}
+              </div>
+              {myTodayAttendance?.check_in && (
+                <div className="mt-1 text-xs opacity-90">In: {myTodayAttendance.check_in}</div>
+              )}
+              {myTodayAttendance?.check_out && (
+                <div className="mt-1 text-xs opacity-90">Out: {myTodayAttendance.check_out}</div>
+              )}
+            </div>
+            <div className="mt-3 space-y-2">
+              <button
+                onClick={handleMarkMyAttendance}
+                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm ${attendanceMarked
+                  ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                  : 'bg-white text-indigo-600 hover:bg-indigo-50'
+                  }`}
+                disabled={attendanceMarked}
+              >
+                {attendanceMarked ? 'Checked In' : 'Check In'}
+              </button>
+
+              <button
+                onClick={handleMyCheckout}
+                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm ${!attendanceMarked || checkoutMarked
+                  ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                  }`}
+                disabled={!attendanceMarked || checkoutMarked}
+              >
+                {checkoutMarked ? 'Checked Out' : 'Check Out'}
+              </button>
+            </div>
+          </div>
           <div className="bg-white shadow rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Team Size</p>
             <p className="text-2xl font-semibold text-gray-900">{teamSize}</p>
           </div>
-          <div className="bg-white shadow rounded-lg p-4">
-            <p className="text-xs text-gray-500 uppercase">Pending Leaves</p>
-            <p className="text-2xl font-semibold text-yellow-600">
-              {pendingLeaves}
-            </p>
+
+        </div>
+
+        {/* Notifications Section */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+            <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+              {notifications.length} New
+            </span>
           </div>
-          <div className="bg-white shadow rounded-lg p-4">
-            <p className="text-xs text-gray-500 uppercase">Approved Leaves</p>
-            <p className="text-2xl font-semibold text-green-600">
-              {approvedLeaves}
-            </p>
+          <div className="max-h-60 overflow-y-auto">
+            {notifications.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {notifications.map((n) => (
+                  <li key={n.id} className={`py-3 flex items-start space-x-3 ${!n.is_read ? 'bg-blue-50/30' : ''}`}>
+                    <span className="text-xl">📢</span>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-900">{n.message}</p>
+                      <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">No new notifications</p>
+            )}
           </div>
-          <div className="bg-white shadow rounded-lg p-4">
-            <p className="text-xs text-gray-500 uppercase">Rejected Leaves</p>
-            <p className="text-2xl font-semibold text-red-600">
-              {rejectedLeaves}
-            </p>
+        </div>
+
+
+
+        {/* My Leave & Approval Overview (Moved from Profile) */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Leave & Approval Overview</h3>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="p-3 bg-yellow-50 rounded-lg">
+              <p className="text-2xl font-bold text-yellow-600">{managerProfile?.stats?.leaves?.pending || 0}</p>
+              <p className="text-xs text-yellow-700 font-medium uppercase mt-1">Pending</p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <p className="text-2xl font-bold text-green-600">{managerProfile?.stats?.leaves?.approved || 0}</p>
+              <p className="text-xs text-green-700 font-medium uppercase mt-1">Approved</p>
+            </div>
+            <div className="p-3 bg-red-50 rounded-lg">
+              <p className="text-2xl font-bold text-red-600">{managerProfile?.stats?.leaves?.rejected || 0}</p>
+              <p className="text-xs text-red-700 font-medium uppercase mt-1">Rejected</p>
+            </div>
           </div>
         </div>
 
@@ -321,7 +505,7 @@ function ManagerDashboard() {
             <li>Statistics & reports: team-level only</li>
           </ul>
         </div>
-      </div>
+      </div >
     );
   };
 
@@ -816,17 +1000,7 @@ function ManagerDashboard() {
     downloadCSV(data, `Team_Leaves_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
-  const handleDownloadOvertime = () => {
-    // Filter for actual overtime or just dump work hours with overtime column
-    const data = teamWorkHours.map(w => ({
-      ID: w.id,
-      Date: w.date,
-      Name: w.employee_name,
-      'Total Hours': w.hours,
-      'Overtime Hours': w.overtime_hours
-    }));
-    downloadCSV(data, `Team_Overtime_WorkHours_${new Date().toISOString().split('T')[0]}.csv`);
-  };
+
   const renderReports = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Team Reports</h2>
@@ -955,13 +1129,7 @@ function ManagerDashboard() {
           >
             📥 Download Leave Report
           </button>
-          <button
-            type="button"
-            onClick={handleDownloadOvertime}
-            className="inline-flex items-center px-4 py-2 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 shadow-sm"
-          >
-            📥 Download Overtime Report
-          </button>
+
         </div>
       </div>
     </div>
@@ -971,30 +1139,7 @@ function ManagerDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <h2 className="text-2xl font-bold text-gray-800">My Attendance & Calendar</h2>
-        <div className="flex gap-2">
-          {!attendanceMarked ? (
-            <button
-              onClick={handleMarkMyAttendance}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold"
-            >
-              Check In
-            </button>
-          ) : (
-            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
-          )}
 
-          {attendanceMarked && !checkoutMarked && (
-            <button
-              onClick={handleMyCheckout}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold"
-            >
-              Check Out
-            </button>
-          )}
-          {checkoutMarked && (
-            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
-          )}
-        </div>
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -1052,6 +1197,95 @@ function ManagerDashboard() {
         error: err.response?.data?.error || 'Failed to change password',
         success: ''
       });
+    }
+  };
+
+  // Handlers for Phone Editing
+  const handleEditPhoneClick = () => {
+    const currentPhone = managerProfile?.user?.phone || profile?.user?.phone || '';
+    setTempPhone(currentPhone);
+    setIsEditingPhone(true);
+  };
+
+  const handleCancelEditPhone = () => {
+    setIsEditingPhone(false);
+    setTempPhone('');
+  };
+
+  const handleSavePhone = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${id}/profile`,
+        { phone: tempPhone },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Update local state to reflect change immediately without full reload if possible, 
+      // or just reload profile.
+      alert('Phone number updated successfully');
+      setIsEditingPhone(false);
+
+      // Refresh key data
+      loadManagerData();
+    } catch (err) {
+      console.error('Failed to update phone:', err);
+      alert('Failed to update phone number');
+    }
+  };
+
+  // Handlers for Address Editing
+  const handleEditAddressClick = () => {
+    const currentAddress = managerProfile?.user?.address || profile?.user?.address || '';
+    setTempAddress(currentAddress);
+    setIsEditingAddress(true);
+  };
+
+  const handleCancelEditAddress = () => {
+    setIsEditingAddress(false);
+    setTempAddress('');
+  };
+
+  const handleSaveAddress = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${id}/profile`,
+        { address: tempAddress },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert('Address updated successfully');
+      setIsEditingAddress(false);
+      loadManagerData();
+    } catch (err) {
+      console.error('Failed to update address:', err);
+      alert('Failed to update address');
+    }
+  };
+
+  // Handlers for Emergency Contact Editing
+  const handleEditEmergencyClick = () => {
+    const currentEmergency = managerProfile?.user?.emergency_contact || profile?.user?.emergency_contact || '';
+    setTempEmergency(currentEmergency);
+    setIsEditingEmergency(true);
+  };
+
+  const handleCancelEditEmergency = () => {
+    setIsEditingEmergency(false);
+    setTempEmergency('');
+  };
+
+  const handleSaveEmergency = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/employee/${id}/profile`,
+        { emergency_contact: tempEmergency },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert('Emergency contact updated successfully');
+      setIsEditingEmergency(false);
+      loadManagerData();
+    } catch (err) {
+      console.error('Failed to update emergency contact:', err);
+      alert('Failed to update emergency contact');
     }
   };
 
@@ -1183,9 +1417,129 @@ function ManagerDashboard() {
                 <span className="text-gray-500 font-medium">Email:</span>
                 <span className="col-span-2 text-gray-900">{user.email}</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 items-center">
                 <span className="text-gray-500 font-medium">Phone:</span>
-                <span className="col-span-2 text-gray-900">{user.phone || 'Not set'}</span>
+                <span className="col-span-2 text-gray-900 flex items-center justify-between">
+                  {isEditingPhone ? (
+                    <div className="flex items-center space-x-2 w-full">
+                      <input
+                        type="text"
+                        value={tempPhone}
+                        onChange={(e) => setTempPhone(e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Enter phone number"
+                      />
+                      <button
+                        onClick={handleSavePhone}
+                        className="p-1 text-green-600 hover:text-green-800"
+                        title="Save"
+                      >
+                        ✅
+                      </button>
+                      <button
+                        onClick={handleCancelEditPhone}
+                        className="p-1 text-red-600 hover:text-red-800"
+                        title="Cancel"
+                      >
+                        ❌
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{user.phone || 'Not set'}</span>
+                      <button
+                        onClick={handleEditPhoneClick}
+                        className="ml-2 text-xs text-indigo-600 hover:underline hover:text-indigo-800 focus:outline-none"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Address */}
+              <div className="grid grid-cols-3 gap-2 items-center">
+                <span className="text-gray-500 font-medium">Address:</span>
+                <span className="col-span-2 text-gray-900 flex items-center justify-between">
+                  {isEditingAddress ? (
+                    <div className="flex items-center space-x-2 w-full">
+                      <input
+                        type="text"
+                        value={tempAddress}
+                        onChange={(e) => setTempAddress(e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Enter address"
+                      />
+                      <button
+                        onClick={handleSaveAddress}
+                        className="p-1 text-green-600 hover:text-green-800"
+                        title="Save"
+                      >
+                        ✅
+                      </button>
+                      <button
+                        onClick={handleCancelEditAddress}
+                        className="p-1 text-red-600 hover:text-red-800"
+                        title="Cancel"
+                      >
+                        ❌
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{user.address || 'Not set'}</span>
+                      <button
+                        onClick={handleEditAddressClick}
+                        className="ml-2 text-xs text-indigo-600 hover:underline hover:text-indigo-800 focus:outline-none"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="grid grid-cols-3 gap-2 items-center">
+                <span className="text-gray-500 font-medium">Emergency Contact:</span>
+                <span className="col-span-2 text-gray-900 flex items-center justify-between">
+                  {isEditingEmergency ? (
+                    <div className="flex items-center space-x-2 w-full">
+                      <input
+                        type="text"
+                        value={tempEmergency}
+                        onChange={(e) => setTempEmergency(e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Enter emergency contact"
+                      />
+                      <button
+                        onClick={handleSaveEmergency}
+                        className="p-1 text-green-600 hover:text-green-800"
+                        title="Save"
+                      >
+                        ✅
+                      </button>
+                      <button
+                        onClick={handleCancelEditEmergency}
+                        className="p-1 text-red-600 hover:text-red-800"
+                        title="Cancel"
+                      >
+                        ❌
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{user.emergency_contact || 'Not set'}</span>
+                      <button
+                        onClick={handleEditEmergencyClick}
+                        className="ml-2 text-xs text-indigo-600 hover:underline hover:text-indigo-800 focus:outline-none"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <span className="text-gray-500 font-medium">Department:</span>
@@ -1231,43 +1585,51 @@ function ManagerDashboard() {
             </div>
           </div>
 
-          {/* 4 & 5. Stats Overview */}
-          <div className="space-y-6">
-            {/* Leave Overview */}
-            <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Leave & Approval Overview</h3>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-2xl font-bold text-yellow-600">{stats.leaves.pending || 0}</p>
-                  <p className="text-xs text-yellow-700 font-medium uppercase mt-1">Pending</p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{stats.leaves.approved || 0}</p>
-                  <p className="text-xs text-green-700 font-medium uppercase mt-1">Approved</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{stats.leaves.rejected || 0}</p>
-                  <p className="text-xs text-red-700 font-medium uppercase mt-1">Rejected</p>
-                </div>
-              </div>
-            </div>
+          {/* 4. Work & Attendance Summary */}
+          <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Work & Attendance Summary</h3>
 
-            {/* Attendance & Work Summary */}
-            <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">My Work Summary</h3>
-              <div className="flex items-center justify-between border-b pb-4 mb-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-sm text-gray-500">Today's Status</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${stats.work.today_status === 'present' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                  {stats.work.today_status?.toUpperCase() || 'NOT MARKED'}
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${stats?.work?.today_status === 'present' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {stats?.work?.today_status?.toUpperCase() || 'NOT MARKED'}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
+
+              <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-sm text-gray-500">Monthly Hours</span>
-                <span className="text-xl font-bold text-indigo-600">{stats.work.month_hours || 0} hrs</span>
+                <span className="text-lg font-bold text-indigo-600">{stats?.work?.month_hours || 0} hrs</span>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Monthly Attendance Summary</p>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-green-50 p-2 rounded">
+                    <div className="font-bold text-green-700">
+                      {myAttendanceRecords.filter(r => r.status === 'present').length}
+                    </div>
+                    <div className="text-green-600">Present</div>
+                  </div>
+                  <div className="bg-red-50 p-2 rounded">
+                    <div className="font-bold text-red-700">
+                      {myAttendanceRecords.filter(r => r.status === 'absent').length}
+                    </div>
+                    <div className="text-red-600">Absent</div>
+                  </div>
+                  <div className="bg-yellow-50 p-2 rounded">
+                    <div className="font-bold text-yellow-700">
+                      {myAttendanceRecords.filter(r => r.status === 'late').length}
+                    </div>
+                    <div className="text-yellow-600">Late</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
         </div>
+
 
         {/* 6. Account Settings */}
         <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
@@ -1283,12 +1645,7 @@ function ManagerDashboard() {
               >
                 Change Password
               </button>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
-              >
-                Logout
-              </button>
+
             </div>
           </div>
         </div>
@@ -1412,6 +1769,7 @@ function ManagerDashboard() {
               {managerUser?.role})
             </p>
           </div>
+
         </header>
 
         {/* Content */}
@@ -1432,8 +1790,8 @@ function ManagerDashboard() {
           {activeTab === TABS.PROFILE && renderProfile()}
         </main>
         {renderChangePasswordModal()}
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
 

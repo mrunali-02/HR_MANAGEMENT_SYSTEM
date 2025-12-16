@@ -752,7 +752,7 @@ export async function deleteDepartment(req, res) {
 export async function getHolidays(req, res) {
   try {
     const [holidays] = await db.execute(
-      'SELECT id, name, date, description, created_at FROM holidays ORDER BY date ASC'
+      'SELECT id, name, holiday_date as date, description, created_at FROM holidays ORDER BY holiday_date ASC'
     );
     res.json({ holidays });
   } catch (error) {
@@ -768,7 +768,7 @@ export async function createHoliday(req, res) {
     }
 
     const [result] = await db.execute(
-      'INSERT INTO holidays (name, date, description) VALUES (?, ?, ?)',
+      'INSERT INTO holidays (name, holiday_date, description) VALUES (?, ?, ?)',
       [name, date, description || null]
     );
 
@@ -789,7 +789,7 @@ export async function updateHoliday(req, res) {
     const { name, date, description } = req.body;
 
     await db.execute(
-      'UPDATE holidays SET name = ?, date = ?, description = ? WHERE id = ?',
+      'UPDATE holidays SET name = ?, holiday_date = ?, description = ? WHERE id = ?',
       [name, date, description || null, id]
     );
 

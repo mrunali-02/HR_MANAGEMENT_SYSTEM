@@ -400,33 +400,100 @@ function HrDashboard() {
 
   const handleMarkAttendance = async () => {
     if (attendanceMarked || todayAttendance?.status === 'present') return;
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setSuccess('Checked in successfully!');
-      fetchMyAttendance();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      alert('Check-in failed');
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    if (!confirmCheckIn) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/mark`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setSuccess('Checked in successfully!');
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error(err);
+          let errorMsg = err.response?.data?.error || 'Check-in failed';
+
+          if (errorMsg.includes('Attendance already marked')) {
+            fetchMyAttendance(); // Sync state
+          }
+
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location...') setSuccess('');
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        setError('Unable to retrieve location. Please enable GPS.');
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleCheckout = async () => {
     if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const hours = res.data.total_hours || '0';
-      setSuccess(`Checked out! Worked ${hours} hours.`);
-      fetchMyAttendance();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      alert('Checkout failed');
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    setSuccess('Fetching location for checkout...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+          const res = await axios.post(`${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const hours = res.data.total_hours || '0';
+          setSuccess(`Checked out! Worked ${hours} hours.`);
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error(err);
+          let errorMsg = err.response?.data?.error || 'Checkout failed';
+
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          if (success === 'Fetching location for checkout...') setSuccess('');
+        }
+      },
+      (geoError) => {
+        console.error('Geolocation error:', geoError);
+        setError('Unable to retrieve location. Please enable GPS.');
+        setSuccess('');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleToggleHoliday = async (dateStr, isHoliday) => {
@@ -636,22 +703,17 @@ function HrDashboard() {
             >
               {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
             </button>
-            {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
-              <button
-                onClick={handleCheckout}
-                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-md transition"
-              >
-                Check Out
-              </button>
-            )}
-            {checkoutMarked && todayAttendance?.check_out && (
-              <button
-                disabled
-                className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-green-600 text-white cursor-not-allowed opacity-90"
-              >
-                ✓ Checked Out
-              </button>
-            )}
+
+            <button
+              onClick={handleCheckout}
+              disabled={!attendanceMarked || checkoutMarked}
+              className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${!attendanceMarked || checkoutMarked
+                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                }`}
+            >
+              {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
+            </button>
           </div>
         </div>
 
