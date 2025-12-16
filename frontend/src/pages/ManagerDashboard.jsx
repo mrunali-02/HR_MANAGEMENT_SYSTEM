@@ -628,6 +628,13 @@ function ManagerDashboard() {
 
   const handleMyLeaveFormChange = (field, value) => {
     if (field === 'startDate' || field === 'endDate') {
+      const dateObj = new Date(value);
+      const day = dateObj.getDay();
+      if (day === 0 || day === 6) {
+        alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
+        return;
+      }
+
       const isHoliday = holidays.some(h => {
         let hDate = h.date;
         if (typeof h.date === 'string') {

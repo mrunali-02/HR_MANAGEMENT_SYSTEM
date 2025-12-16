@@ -55,18 +55,20 @@ import {
 
 const router = express.Router();
 
-// Auth
+// -- Public / Auth --
 router.post('/login', loginRateLimiter, adminLogin);
 
+// -- Protected Routes (requireRole 'admin') --
+router.use(authToken, requireRole('admin'));
+
 // Dashboard summary
-router.get('/dashboard/summary', authToken, requireRole('admin'), getDashboardSummary);
+router.get('/dashboard/summary', getDashboardSummary);
 
 // Employee Management
-router.post('/employees', authToken, requireRole('admin'), addEmployee);
-router.put('/employees/:id', authToken, requireRole('admin'), updateEmployee);
-// router.get('/users', authToken, requireRole('admin'), getUsers);
-router.get('/users', authToken, requireRole('admin'), getUsers);
-router.delete('/users/:id', authToken, requireRole('admin'), deleteUser);
+router.post('/employees', addEmployee);
+router.put('/employees/:id', updateEmployee);
+router.get('/users', getUsers);
+router.delete('/users/:id', deleteUser);
 
 // Leave Management
 router.get('/leave-requests', authToken, requireRole('admin'), getLeaveRequests);

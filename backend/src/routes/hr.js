@@ -14,7 +14,10 @@ import {
   exportAttendance,
   exportLeaves,
   exportEmployees,
-  getWorkHoursStats
+  getWorkHoursStats,
+  getAuditLogs,
+  getAllAttendanceRecords,
+  getCalendarSummary
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -35,6 +38,9 @@ router.put('/leave-requests/:id/reject', rejectLeaveRequest);
 router.get('/analytics', getHrAnalytics);
 router.get('/dashboard/summary', getDashboardSummary);
 router.get('/analytics/work-hours', getWorkHoursStats);
+router.get('/audit-logs', getAuditLogs);
+router.get('/attendance-records', getAllAttendanceRecords);
+router.get('/calendar-summary', getCalendarSummary);
 
 // Reports & Exports
 router.get('/reports/attendance', getAttendanceReport);

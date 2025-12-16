@@ -1078,6 +1078,7 @@ export async function getAuditLogs(req, res) {
     // Whitelist allowed columns for sorting
     const allowedSortColumns = {
       'time': 'al.created_at',
+      'timestamp': 'al.created_at',
       'user': 'user_email', // or user_name
       'activity': 'al.action',
       'action': 'al.action',
@@ -1103,7 +1104,7 @@ export async function getAuditLogs(req, res) {
       OR al.action LIKE ?
         )
       `;
-      const searchTerm = `% ${search}% `;
+      const searchTerm = `%${search}%`;
       queryParams.push(searchTerm, searchTerm, searchTerm);
       countParams.push(searchTerm, searchTerm, searchTerm);
     }
@@ -1340,5 +1341,169 @@ export async function getEmployeeRoleStats(req, res) {
   } catch (error) {
     console.error('Role stats error:', error);
     res.status(500).json({ error: 'Failed to fetch role stats' });
+  }
+}
+
+export async function getAllAttendanceRecords(req, res) {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    const { startDate, endDate, department } = req.query;
+
+    const offset = (page - 1) * limit;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (search) {
+      whereClause += ` AND (e.name LIKE ? OR e.email LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (startDate) {
+      whereClause += ` AND a.attendance_date >= ?`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      whereClause += ` AND a.attendance_date <= ?`;
+      params.push(endDate);
+    }
+
+    if (department) {
+      whereClause += ` AND e.department = ?`;
+      params.push(department);
+    }
+
+    // Main query
+    const query = `
+      SELECT 
+        a.id, a.user_id, e.name as employee_name, e.email as employee_email, e.department,
+        a.attendance_date as date, a.status, 
+        a.check_in_time, a.check_out_time, 
+        TIME_FORMAT(
+          SEC_TO_TIME(
+            TIMESTAMPDIFF(
+              SECOND,
+              CONCAT(a.attendance_date, ' ', a.check_in_time),
+              CONCAT(a.attendance_date, ' ', a.check_out_time)
+            )
+          ),
+          '%H:%i'
+        ) as total_hours
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      ${whereClause}
+      ORDER BY a.attendance_date DESC, a.check_in_time DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    // Count query
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      ${whereClause}
+    `;
+
+    const [rows] = await db.execute(query, params);
+    const [countResult] = await db.execute(countQuery, params);
+
+    res.json({
+      records: rows,
+      total: countResult[0].total,
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+
+  } catch (error) {
+    console.error('Get all attendance records error:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance records' });
+  }
+}
+
+export async function getCalendarSummary(req, res) {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and year are required' });
+    }
+
+    // Prepare date range
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+    // 1. Fetch Attendance (Present, Absent, Late - assuming 'absent' is explicitly marked or inferred for daily checks)
+    // Note: 'absent' records might not exist if system doesn't auto-create them. We only fetch what is recorded.
+    const [attendanceRows] = await db.execute(`
+      SELECT a.attendance_date, a.status, a.user_id, e.name
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      WHERE a.attendance_date BETWEEN ? AND ?
+    `, [startDate, endDate]);
+
+    // 2. Fetch Approved Leaves
+    // Leaves can span multiple days, so we check overlap with the month
+    const [leaveRows] = await db.execute(`
+      SELECT lr.start_date, lr.end_date, lr.type, lr.user_id, e.name
+      FROM leave_requests lr
+      JOIN employees e ON lr.user_id = e.id
+      WHERE lr.status = 'approved'
+      AND (
+        (lr.start_date BETWEEN ? AND ?) OR
+        (lr.end_date BETWEEN ? AND ?) OR
+        (lr.start_date <= ? AND lr.end_date >= ?)
+      )
+    `, [startDate, endDate, startDate, endDate, startDate, endDate]);
+
+    // 3. Process into Daily Map
+    const summary = {};
+
+    // Initialize all days in month
+    for (let d = 1; d <= lastDay; d++) {
+      const dayStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      summary[dayStr] = { present: [], absent: [], leave: [], holiday: null };
+    }
+
+    // Fill Attendance
+    attendanceRows.forEach(row => {
+      const dateStr = row.attendance_date instanceof Date
+        ? row.attendance_date.toISOString().split('T')[0]
+        : row.attendance_date;
+
+      if (summary[dateStr]) {
+        if (row.status === 'present' || row.status === 'late' || row.status === 'half_day') {
+          summary[dateStr].present.push(row.name);
+        } else if (row.status === 'absent') {
+          summary[dateStr].absent.push(row.name);
+        }
+      }
+    });
+
+    // Fill Leaves (expand ranges)
+    leaveRows.forEach(row => {
+      let current = new Date(row.start_date);
+      const end = new Date(row.end_date);
+      const limitStart = new Date(startDate);
+      const limitEnd = new Date(endDate);
+
+      // Clamp start
+      if (current < limitStart) current = limitStart;
+
+      while (current <= end && current <= limitEnd) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (summary[dateStr]) {
+          summary[dateStr].leave.push({ name: row.name, type: row.type });
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    res.json(summary);
+  } catch (error) {
+    console.error('Get calendar summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar summary' });
   }
 }

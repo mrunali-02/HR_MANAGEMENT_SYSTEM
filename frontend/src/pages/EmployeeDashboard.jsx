@@ -58,7 +58,6 @@ function EmployeeDashboard() {
     gender: '',
     blood_group: '',
     display_name: '',
-    bio: '',
     phone: '',
     address: '',
     emergency_contact: ''
@@ -120,7 +119,6 @@ function EmployeeDashboard() {
         gender: u.gender || '',
         blood_group: u.blood_group || '',
         display_name: p.display_name || u.name || '',
-        bio: p.bio || '',
         phone: u.phone || '',
         address: u.address || '',
         emergency_contact: u.emergency_contact || ''
@@ -406,6 +404,13 @@ function EmployeeDashboard() {
 
   const handleLeaveFormChange = (field, value) => {
     if (field === 'startDate' || field === 'endDate') {
+      const dateObj = new Date(value);
+      const day = dateObj.getDay();
+      if (day === 0 || day === 6) {
+        alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
+        return;
+      }
+
       const isHoliday = holidays.some(h => {
         let hDate = h.date;
         if (typeof h.date === 'string') {
@@ -514,7 +519,6 @@ function EmployeeDashboard() {
         {
           name: settingsForm.name,
           display_name: settingsForm.display_name,
-          bio: settingsForm.bio,
           phone: settingsForm.phone,
           address: settingsForm.address,
           emergency_contact: settingsForm.emergency_contact
@@ -535,7 +539,6 @@ function EmployeeDashboard() {
         profile: {
           ...(prev.profile || {}),
           display_name: settingsForm.display_name,
-          bio: settingsForm.bio
         }
       }));
     } catch (err) {
@@ -1249,16 +1252,6 @@ function EmployeeDashboard() {
                           onChange={(e) => handleSettingsChange('display_name', e.target.value)}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
                           placeholder="Preferred display name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Bio</label>
-                        <textarea
-                          rows="1"
-                          value={settingsForm.bio}
-                          onChange={(e) => handleSettingsChange('bio', e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
-                          placeholder="Brief bio"
                         />
                       </div>
                     </div>
