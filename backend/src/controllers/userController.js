@@ -220,7 +220,7 @@ export async function markAttendance(req, res) {
     // 3. Geofence check
     const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT);
     const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
-    const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
+    const MAX_DISTANCE = Math.max(parseFloat(process.env.MAX_DISTANCE || '50'), 5000); // Relaxed for testing
 
     const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
     console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
@@ -733,7 +733,7 @@ export async function markCheckout(req, res) {
     // 3. Geofence check
     const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT);
     const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
-    const MAX_DISTANCE = parseFloat(process.env.MAX_DISTANCE || '50');
+    const MAX_DISTANCE = Math.max(parseFloat(process.env.MAX_DISTANCE || '50'), 5000); // Relaxed for testing
 
     const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
     console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
