@@ -295,7 +295,7 @@ export async function getLeaveBalance(req, res) {
       base.used += row.days;
       const key = row.type;
       if (typeof base[key] === 'number') {
-        base[key] = Math.max(base[key] - row.days, 0);
+        base[key] = base[key] - row.days;
       }
     });
 
@@ -372,7 +372,7 @@ export async function createLeaveRequest(req, res) {
     // Fetch overlapping holidays
     // Note: ensure date format matches DB or use comparison
     const [holidayRows] = await db.execute(
-      'SELECT COUNT(*) as count FROM holidays WHERE holiday_date BETWEEN ? AND ?',
+      'SELECT COUNT(*) as count FROM holidays WHERE date BETWEEN ? AND ?',
       [start_date, end_date]
     );
     const holidayCount = holidayRows[0].count;
@@ -412,7 +412,7 @@ export async function createLeaveRequest(req, res) {
     res.status(201).json({ message: 'Leave request submitted' });
   } catch (error) {
     console.error('Create leave request error:', error);
-    res.status(500).json({ error: 'Failed to create leave request' });
+    res.status(500).json({ error: 'Failed to create leave request', details: error.message });
   }
 }
 

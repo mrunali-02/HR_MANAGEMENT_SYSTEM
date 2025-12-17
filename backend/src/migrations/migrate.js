@@ -153,13 +153,21 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_policies (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        type ENUM('sick', 'casual', 'paid') NOT NULL,
+        type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         carry_forward TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created leave_policies table');
+
+    // Migration: Update ENUMs for Work From Home (leave_policies)
+    try {
+      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL");
+    } catch (err) {
+      console.log('Note: leave_policies ENUM update skipped or failed:', err.message);
+    }
+
     // Seed default leave policies if empty
     const [lpCountRows] = await connection.execute(
       'SELECT COUNT(*) AS cnt FROM leave_policies'
@@ -171,7 +179,8 @@ async function migrate() {
     VALUES
       ('Sick Leave',     'sick',     6, 0),
       ('Casual Leave',   'casual',   6, 0),
-      ('Planned Leave',  'paid',    12, 0)
+      ('Planned Leave',  'paid',    12, 0),
+      ('Work From Home', 'work_from_home', 10, 0)
    `);
       console.log('✓ Seeded default leave policies');
     } else {
@@ -180,6 +189,13 @@ async function migrate() {
       await connection.execute("UPDATE leave_policies SET total_days = 6 WHERE type = 'sick'");
       await connection.execute("UPDATE leave_policies SET total_days = 6 WHERE type = 'casual'");
       await connection.execute("UPDATE leave_policies SET total_days = 12, name = 'Planned Leave' WHERE type = 'paid'");
+
+      // Ensure WFH policy exists
+      const [wfhRows] = await connection.execute("SELECT * FROM leave_policies WHERE type = 'work_from_home'");
+      if (wfhRows.length === 0) {
+        await connection.execute("INSERT INTO leave_policies (name, type, total_days, carry_forward) VALUES ('Work From Home', 'work_from_home', 10, 0)");
+        console.log('✓ Added Work From Home policy');
+      }
       console.log('✓ Updated existing leave policies');
     }
 
@@ -247,7 +263,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        type ENUM('sick', 'casual', 'paid') NOT NULL,
+        type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         reason TEXT,
@@ -266,7 +282,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_balances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        leave_type ENUM('sick', 'casual', 'paid') NOT NULL,
+        leave_type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         used_days INT NOT NULL DEFAULT 0,
         remaining_days INT NOT NULL DEFAULT 0,
@@ -278,6 +294,18 @@ async function migrate() {
         INDEX idx_user_year (user_id, year)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    // Migration: Update ENUMs for Work From Home
+    try {
+      console.log('Running WFH ENUM migration...');
+      await connection.execute("ALTER TABLE leave_requests MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL");
+      await connection.execute("ALTER TABLE leave_balances MODIFY COLUMN leave_type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL");
+      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home') NOT NULL");
+      console.log('✓ Updated ENUMs for Work From Home');
+    } catch (err) {
+      console.log('Note: WFH ENUM update skipped or failed (might already exist):', err.message);
+    }
+
 
     console.log('✓ Created leave_balances table');
 

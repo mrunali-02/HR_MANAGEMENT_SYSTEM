@@ -391,7 +391,7 @@ export async function getLeaveRequests(req, res) {
       lr.type, lr.start_date, lr.end_date, lr.days, lr.document_url, lr.reason, lr.status, lr.created_at
       FROM leave_requests lr
       JOIN employees e ON lr.user_id = e.id
-      ORDER BY lr.created_at DESC
+      ORDER BY (CASE WHEN lr.status = 'pending' THEN 0 ELSE 1 END) ASC, lr.created_at DESC
       `);
 
     res.json({ requests });
@@ -477,6 +477,50 @@ export async function approveLeaveRequest(req, res) {
       applicant_role: requesterRole
     });
 
+    // Auto-mark attendance if Work From Home
+    if (type === 'work_from_home') {
+      const start = new Date(start_date);
+      const end = new Date(end_date);
+
+      // Loop through dates
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Skip weekends? Maybe WFH is allowed on weekends if applied? 
+        // User didn't specify, but usually "attendance" implies working days.
+        // However, if they requested leave for a date and it was approved, we should mark it.
+        // But we have weekend restrictions on applying, so likely won't be weekend.
+
+        const dateStr = d.toISOString().split('T')[0];
+
+        // Insert remote attendance, ignore if exists
+        try {
+          await db.execute(
+            `INSERT IGNORE INTO attendance (user_id, attendance_date, status, check_in_time, check_out_time, created_at)
+             VALUES (?, ?, 'remote', '10:00:00', '19:00:00', NOW())`,
+            [user_id, dateStr]
+          );
+          // Also add work_hours entry? 
+          // If 'remote', they are working. Let's assume 10-7 (9 hours)
+          // But wait, attendance table has status 'remote'. 
+          // Does the system calculate hours from attendance or work_hours table?
+          // getAttendance uses work_hours JOIN. So we should probably insert into work_hours too.
+
+          // Fetch the ID of the inserted/existing attendance
+          const [attRows] = await db.execute('SELECT id FROM attendance WHERE user_id=? AND attendance_date=?', [user_id, dateStr]);
+          if (attRows.length > 0) {
+            const attId = attRows[0].id;
+            await db.execute(
+              `INSERT IGNORE INTO work_hours (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours)
+                VALUES (?, ?, ?, '10:00:00', '19:00:00', 9)`,
+              [user_id, attId, dateStr]
+            );
+          }
+        } catch (err) {
+          console.error(`Failed to auto-mark WFH attendance for ${dateStr}:`, err);
+          // Continue loop
+        }
+      }
+    }
+
     res.json({ message: 'Leave approved' });
   } catch (error) {
     console.error('Approve leave error:', error);
@@ -527,6 +571,43 @@ export async function rejectLeaveRequest(req, res) {
   }
 }
 
+export async function createApprovedLeave(req, res) {
+  try {
+    const { employeeId } = req.params;
+    const { start_date, end_date, reason } = req.body;
+
+    if (!start_date || !end_date || !reason) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Insert as approved immediately
+    // reviewed_by = req.user.id (the HR who added it)
+    await db.execute(
+      `INSERT INTO leave_requests (user_id, type, start_date, end_date, reason, status, reviewed_by)
+       VALUES (?, 'sick', ?, ?, ?, 'approved', ?)`,
+      [employeeId, start_date, end_date, reason, req.user.id]
+    );
+
+    // Notification
+    await createNotification(
+      employeeId,
+      `HR has added a Sick Leave record for you from ${start_date} to ${end_date}.`
+    );
+
+    // Audit log
+    await logAudit(req.user.id, 'leave_created_admin', {
+      employee_id: employeeId,
+      type: 'sick',
+      status: 'approved'
+    });
+
+    res.json({ message: 'Sick leave added and approved successfully' });
+  } catch (error) {
+    console.error('Create approved leave error:', error);
+    res.status(500).json({ error: 'Failed to create sick leave' });
+  }
+}
+
 /* ======================
      HR ANALYTICS
 ====================== */
@@ -544,7 +625,8 @@ export async function getHrAnalytics(req, res) {
         (SELECT COUNT(*) FROM employees WHERE role = 'employee') AS totalRegulars,
         (SELECT COUNT(*) FROM leave_requests WHERE status = 'approved' AND start_date BETWEEN ? AND ?) AS approvedLeaves,
         (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND start_date BETWEEN ? AND ?) AS pendingLeaves,
-        (SELECT COUNT(*) FROM leave_requests WHERE status = 'rejected' AND start_date BETWEEN ? AND ?) AS rejectedLeaves
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'rejected' AND start_date BETWEEN ? AND ?) AS rejectedLeaves,
+        (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending') AS totalPendingLeaves
     `, [start, end, start, end, start, end]);
 
     const [deptStats] = await db.execute(`
@@ -752,7 +834,7 @@ export async function deleteDepartment(req, res) {
 export async function getHolidays(req, res) {
   try {
     const [holidays] = await db.execute(
-      'SELECT id, name, holiday_date as date, description, created_at FROM holidays ORDER BY holiday_date ASC'
+      'SELECT id, name, date, description, created_at FROM holidays ORDER BY date ASC'
     );
     res.json({ holidays });
   } catch (error) {
@@ -789,7 +871,7 @@ export async function updateHoliday(req, res) {
     const { name, date, description } = req.body;
 
     await db.execute(
-      'UPDATE holidays SET name = ?, holiday_date = ?, description = ? WHERE id = ?',
+      'UPDATE holidays SET name = ?, date = ?, description = ? WHERE id = ?',
       [name, date, description || null, id]
     );
 
@@ -1141,6 +1223,40 @@ export async function getAuditLogs(req, res) {
   }
 }
 
+export async function exportAuditLogs(req, res) {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Build query similar to getAuditLogs but without pagination and simple selection
+    const [rows] = await db.execute(`
+      SELECT 
+        al.created_at as time,
+        REPLACE(e.name, ',', '') as user_name,
+        e.email as user_email,
+        al.action,
+        al.metadata
+      FROM audit_logs al
+      LEFT JOIN employees e ON al.user_id = e.id
+      WHERE DATE(al.created_at) BETWEEN ? AND ?
+      ORDER BY al.created_at ASC
+    `, [start, end]);
+
+    // Format metadata to be more readable if it's a JSON string
+    const formattedRows = rows.map(row => ({
+      ...row,
+      metadata: typeof row.metadata === 'object' ? JSON.stringify(row.metadata) : row.metadata
+    }));
+
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Export audit logs error:', error);
+    res.status(500).json({ error: 'Failed to export audit logs' });
+  }
+}
+
 /* ======================
      REPORTS (CHARTS)
 ====================== */
@@ -1293,10 +1409,10 @@ export async function getWorkHoursStats(req, res) {
       SELECT 
         e.department, 
         AVG(
-          TIMESTAMPDIFF(HOUR, 
+          TIMESTAMPDIFF(MINUTE, 
             CONCAT(a.attendance_date, ' ', a.check_in_time), 
             CONCAT(a.attendance_date, ' ', a.check_out_time)
-          )
+          ) / 60.0
         ) as avg_hours
       FROM attendance a
       JOIN employees e ON a.user_id = e.id
@@ -1311,10 +1427,10 @@ export async function getWorkHoursStats(req, res) {
       SELECT 
         DATE_FORMAT(attendance_date, '%Y-%m-%d') as date,
         AVG(
-          TIMESTAMPDIFF(HOUR, 
+          TIMESTAMPDIFF(MINUTE, 
             CONCAT(attendance_date, ' ', check_in_time), 
             CONCAT(attendance_date, ' ', check_out_time)
-          )
+          ) / 60.0
         ) as avg_hours
       FROM attendance a
       WHERE check_out_time IS NOT NULL 
@@ -1474,7 +1590,7 @@ export async function getCalendarSummary(req, res) {
         : row.attendance_date;
 
       if (summary[dateStr]) {
-        if (row.status === 'present' || row.status === 'late' || row.status === 'half_day') {
+        if (row.status === 'present' || row.status === 'late' || row.status === 'half_day' || row.status === 'remote') {
           summary[dateStr].present.push(row.name);
         } else if (row.status === 'absent') {
           summary[dateStr].absent.push(row.name);
@@ -1484,6 +1600,8 @@ export async function getCalendarSummary(req, res) {
 
     // Fill Leaves (expand ranges)
     leaveRows.forEach(row => {
+      if (row.type === 'work_from_home') return; // Treat WFH as present (handled in attendance), not leave
+
       let current = new Date(row.start_date);
       const end = new Date(row.end_date);
       const limitStart = new Date(startDate);

@@ -17,6 +17,11 @@ import {
   Line,
   CartesianGrid,
 } from 'recharts';
+import { formatDate } from '../utils/dateUtils';
+import {
+  Settings, User, Mail, Calendar, Activity,
+  Phone, Shield, Save, Lock
+} from 'lucide-react';
 import './HrDashboard.css';
 import CalendarView from '../components/CalendarView';
 
@@ -75,6 +80,7 @@ function HrDashboard() {
   const [auditSortBy, setAuditSortBy] = useState('timestamp');
   const [auditSortOrder, setAuditSortOrder] = useState('desc');
   const [auditSearch, setAuditSearch] = useState('');
+  const [auditDateRange, setAuditDateRange] = useState({ start: '', end: '' });
 
   // My Leave Application State (missing earlier)
   const [myLeaveHistory, setMyLeaveHistory] = useState([]);
@@ -92,6 +98,7 @@ function HrDashboard() {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [myLeaveBalance, setMyLeaveBalance] = useState(null);
   const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   // Settings State
@@ -137,7 +144,8 @@ function HrDashboard() {
       fetchMyAttendance(),
       fetchMyLeaves(),
       fetchAnalytics(),
-      fetchSettings()
+      fetchSettings(),
+      fetchMyLeaveBalance()
     ]).finally(() => {
       setLoading(false);
     });
@@ -265,6 +273,19 @@ function HrDashboard() {
     }
   };
 
+  const fetchMyLeaveBalance = async () => {
+    if (!user?.id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/leave-balance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMyLeaveBalance(res.data);
+    } catch (err) {
+      console.error('Error fetching leave balance:', err);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -380,7 +401,17 @@ function HrDashboard() {
     const headers = Object.keys(data[0]);
     const csvContent = [
       headers.join(','),
-      ...data.map(row => headers.map(header => JSON.stringify(row[header] ?? '')).join(','))
+      ...data.map(row => headers.map(header => {
+        let val = row[header] ?? '';
+        // If the header suggests a date field, try to format it
+        if (typeof val === 'string' && (header.includes('date') || header.includes('joined_on') || header.includes('dob') || header.includes('created_at'))) {
+          // check if it looks like a date (simple check)
+          if (val.match(/^\d{4}-\d{2}-\d{2}/)) {
+            val = formatDate(val);
+          }
+        }
+        return JSON.stringify(val);
+      }).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -416,6 +447,14 @@ function HrDashboard() {
         case 'work_hours':
           endpoint = `${API_BASE_URL}/hr/export/attendance`;
           filename = 'work_hours_report.csv';
+          break;
+        case 'audit_logs':
+          endpoint = `${API_BASE_URL}/hr/export/audit-logs`;
+          const params = new URLSearchParams();
+          if (auditDateRange.start) params.append('startDate', auditDateRange.start);
+          if (auditDateRange.end) params.append('endDate', auditDateRange.end);
+          if ([...params].length > 0) endpoint += `?${params.toString()}`;
+          filename = 'audit_logs_report.csv';
           break;
         default:
           return;
@@ -874,6 +913,26 @@ function HrDashboard() {
           <div className="text-4xl font-extrabold text-red-600 mt-2 relative z-10">{dashboardSummary?.totals?.absentToday || 0}</div>
         </div>
 
+        <div className="bg-white p-6 rounded-lg shadow border border-yellow-100 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-yellow-200"></div>
+          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10 mb-2">Your Leave Balance</div>
+
+          <div className="grid grid-cols-3 gap-2 relative z-10">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.sick ?? '-'}</div>
+              <div className="text-xs text-gray-500">Sick</div>
+            </div>
+            <div className="text-center border-l border-gray-200">
+              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.casual ?? '-'}</div>
+              <div className="text-xs text-gray-500">Casual</div>
+            </div>
+            <div className="text-center border-l border-gray-200">
+              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.paid ?? '-'}</div>
+              <div className="text-xs text-gray-500">Planned</div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white p-6 rounded-lg shadow border border-purple-100 relative overflow-hidden">
           <div className="text-sm font-medium opacity-90 uppercase tracking-wider">Pending Leaves</div>
           <div className="text-4xl font-extrabold mt-2">{dashboardSummary?.totals?.pendingLeaveRequests || 0}</div>
@@ -922,7 +981,7 @@ function HrDashboard() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{b.name}</p>
-                    <p className="text-xs text-gray-500">{new Date(b.dob).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</p>
+                    <p className="text-xs text-gray-500">{formatDate(b.dob, 'monthDay')}</p>
                   </div>
                 </div>
               ))
@@ -972,6 +1031,7 @@ function HrDashboard() {
                 <th className="px-4 py-2 text-left">Manager</th>
                 <th className="px-4 py-2 text-left">Assign Manager</th>
                 <th className="px-4 py-2 text-left">Joined</th>
+                <th className="px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -994,7 +1054,17 @@ function HrDashboard() {
                       </select>
                     ) : <span className="text-sm text-gray-400">-</span>}
                   </td>
-                  <td className="px-4 py-2">{u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}</td>
+                  <td className="px-4 py-2">{u.joined_on ? formatDate(u.joined_on) : '-'}</td>
+                  <td className="px-4 py-2">
+                    {u.role === 'employee' || u.role === 'manager' ? (
+                      <button
+                        onClick={() => handleOpenSickLeave(u)}
+                        className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium"
+                      >
+                        + Sick Leave
+                      </button>
+                    ) : <span className="text-gray-400">-</span>}
+                  </td>
                 </tr>
               ))}
               {filteredUsers.length === 0 && (
@@ -1067,7 +1137,7 @@ function HrDashboard() {
               </div>
 
               <div className="text-sm text-gray-600 space-y-1">
-                <p><span className="font-medium">Period:</span> {la.start_date} to {la.end_date} <span className="font-bold ml-2">({la.days || calculateDays(la.start_date, la.end_date)} Days)</span></p>
+                <p><span className="font-medium">Period:</span> {formatDate(la.start_date)} to {formatDate(la.end_date)} <span className="font-bold ml-2">({la.days || calculateDays(la.start_date, la.end_date)} Days)</span></p>
                 <p><span className="font-medium">Reason:</span> {la.reason || 'No reason provided'}</p>
                 {la.document_url && (
                   <p>
@@ -1133,7 +1203,7 @@ function HrDashboard() {
           <div>
             <h2 className="text-2xl font-bold text-gray-900">HR Analytics</h2>
             <p className="text-sm text-gray-500">
-              Showing data from <span className="font-semibold">{analyticsFilters.startDate}</span> to <span className="font-semibold">{analyticsFilters.endDate}</span>
+              Showing data from <span className="font-semibold">{formatDate(analyticsFilters.startDate)}</span> to <span className="font-semibold">{formatDate(analyticsFilters.endDate)}</span>
             </p>
           </div>
 
@@ -1185,7 +1255,7 @@ function HrDashboard() {
           <Card label="Total Employees" value={analytics.summary?.totalEmployees} color="indigo" />
           <Card label="Managers" value={analytics.summary?.totalManagers} color="emerald" />
           <Card label="HR Staff" value={analytics.summary?.totalHr} color="blue" />
-          <Card label="Pending Leaves" value={analytics.summary?.pendingLeaves} color="yellow" />
+          <Card label="Pending Leaves" value={analytics.summary?.totalPendingLeaves ?? analytics.summary?.pendingLeaves} color="yellow" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1253,20 +1323,7 @@ function HrDashboard() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-          <h3 className="text-lg font-semibold mb-2 text-gray-900">Leaves by Department</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leaveDeptData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="department" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="leaveCount" name="Leaves" fill="#f97316" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+
       </div>
     );
   };
@@ -1286,6 +1343,7 @@ function HrDashboard() {
               <option value="sick">Sick Leave</option>
               <option value="casual">Casual Leave</option>
               <option value="paid">Planned Leave</option>
+              <option value="work_from_home">Work From Home</option>
             </select>
           </div>
 
@@ -1342,7 +1400,7 @@ function HrDashboard() {
               {myLeaveHistory.map(l => (
                 <tr key={l.id}>
                   <td className="px-4 py-2 capitalize">{l.type}</td>
-                  <td className="px-4 py-2">{l.start_date} to {l.end_date} <span className="text-gray-400 text-xs ml-1">({l.days} days)</span></td>
+                  <td className="px-4 py-2">{formatDate(l.start_date)} to {formatDate(l.end_date)} <span className="text-gray-400 text-xs ml-1">({l.days} days)</span></td>
                   <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs font-bold ${l.status === 'approved' ? 'bg-green-100 text-green-800' : l.status === 'rejected' ? 'bg-red-100 text-red-800' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}>{l.status}</span></td>
                   <td className="px-4 py-2">{l.status === 'pending' && <button onClick={() => handleCancelMyLeave(l.id)} className="text-red-600 text-sm hover:underline">Cancel</button>}</td>
                 </tr>
@@ -1380,88 +1438,268 @@ function HrDashboard() {
   );
 
   const renderSettings = () => (
-    <div className="space-y-8 max-w-4xl mx-auto pb-10">
-      <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
-
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Personal Details</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[
-            { label: 'Full Name', value: settingsForm.name },
-            { label: 'Email', value: settingsForm.email },
-            { label: 'Role', value: settingsForm.role },
-            { label: 'Department', value: settingsForm.department },
-            { label: 'Date of Joining', value: settingsForm.joined_on },
-            { label: 'Date of Birth', value: settingsForm.dob },
-            { label: 'Gender', value: settingsForm.gender },
-            { label: 'Blood Group', value: settingsForm.blood_group },
-          ].map(field => (
-            <div key={field.label}>
-              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{field.label}</label>
-              <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">{field.value || '-'}</div>
-            </div>
-          ))}
+    <div className="max-w-6xl mx-auto pb-10 space-y-8">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-indigo-600 rounded-lg shadow-lg">
+          <Settings className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Profile Settings</h2>
+          <p className="text-gray-500 text-sm">Manage your personal information and security preferences</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Contact & Preferences</h3>
-        <form onSubmit={handleSaveSettings} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
-              <input type="text" value={settingsForm.phone} onChange={e => handleSettingsChange('phone', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Enter phone number" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Personal Profile Card */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative group">
+            <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+            <div className="px-6 pb-6 text-center -mt-12 relative">
+              <div className="w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-lg">
+                <div className="w-full h-full bg-gray-100 rounded-full flex items-center justify-center text-3xl font-bold text-indigo-600">
+                  {settingsForm.name ? settingsForm.name.charAt(0) : 'U'}
+                </div>
+              </div>
+              <h3 className="mt-4 text-xl font-bold text-gray-900">{settingsForm.name || 'User Name'}</h3>
+              <p className="text-indigo-600 font-medium">{settingsForm.role || 'Role'}</p>
+              <div className="mt-4 flex justify-center gap-2">
+                <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full border border-green-100">
+                  {settingsForm.status || 'Active'}
+                </span>
+                <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
+                  {settingsForm.department || 'Dept'}
+                </span>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Emergency Contact</label>
-              <input type="text" value={settingsForm.emergency_contact} onChange={e => handleSettingsChange('emergency_contact', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Emergency contact info" />
+            <div className="border-t border-gray-50 px-6 py-4 bg-gray-50/50">
+              <div className="grid grid-cols-1 gap-4 text-sm">
+                <div className="flex justify-between items-center group/item hover:bg-white p-2 rounded transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Mail className="w-4 h-4" />
+                    <span>Email</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{settingsForm.email}</span>
+                </div>
+                <div className="flex justify-between items-center group/item hover:bg-white p-2 rounded transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Calendar className="w-4 h-4" />
+                    <span>Joined</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{settingsForm.joined_on ? formatDate(settingsForm.joined_on) : '-'}</span>
+                </div>
+                <div className="flex justify-between items-center group/item hover:bg-white p-2 rounded transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <User className="w-4 h-4" />
+                    <span>DOB</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{settingsForm.dob ? formatDate(settingsForm.dob) : '-'}</span>
+                </div>
+                <div className="flex justify-between items-center group/item hover:bg-white p-2 rounded transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Activity className="w-4 h-4" />
+                    <span>Blood</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{settingsForm.blood_group || '-'}</span>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
-            <textarea rows="2" value={settingsForm.address} onChange={e => handleSettingsChange('address', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Your residential address" />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
-              <input type="text" value={settingsForm.display_name} onChange={e => handleSettingsChange('display_name', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Preferred display name" />
+        {/* Right Column: Editable Forms */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Contact & Preferences Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Phone className="w-5 h-5 text-indigo-500" />
+                Contact & Details
+              </h3>
             </div>
+
+            <form onSubmit={handleSaveSettings} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Phone Number</label>
+                  <input
+                    type="text"
+                    value={settingsForm.phone}
+                    onChange={e => handleSettingsChange('phone', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="+1 (555) 000-0000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Emergency Contact</label>
+                  <input
+                    type="text"
+                    value={settingsForm.emergency_contact}
+                    onChange={e => handleSettingsChange('emergency_contact', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="Name & Number"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-semibold text-gray-700">Residential Address</label>
+                  <textarea
+                    rows="2"
+                    value={settingsForm.address}
+                    onChange={e => handleSettingsChange('address', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm resize-none"
+                    placeholder="Enter your full address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Display Name</label>
+                  <input
+                    type="text"
+                    value={settingsForm.display_name}
+                    onChange={e => handleSettingsChange('display_name', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="Preferred name"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-gray-50">
+                <button
+                  type="submit"
+                  disabled={settingsSaving}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-medium text-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {settingsSaving ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Save className="w-4 h-4" />}
+                  {settingsSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div className="flex justify-end pt-2">
-            <button type="submit" disabled={settingsSaving} className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1">
-              {settingsSaving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
+          {/* Security Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-indigo-500" />
+                Security & Password
+              </h3>
+            </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Security</h3>
-        <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-lg">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Current Password</label>
-            <input type="password" value={passwordForm.currentPassword} onChange={e => handlePasswordChange('currentPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter current password" />
+            <form onSubmit={handlePasswordSubmit} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Current Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={e => handlePasswordChange('currentPassword', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">New Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={e => handlePasswordChange('newPassword', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={e => handlePasswordChange('confirmPassword', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-gray-50">
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-medium text-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {passwordSaving ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Lock className="w-4 h-4" />}
+                  {passwordSaving ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">New Password</label>
-            <input type="password" value={passwordForm.newPassword} onChange={e => handlePasswordChange('newPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter new password" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Confirm New Password</label>
-            <input type="password" value={passwordForm.confirmPassword} onChange={e => handlePasswordChange('confirmPassword', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Confirm new password" />
-          </div>
-          <div className="flex justify-end pt-2">
-            <button type="submit" disabled={passwordSaving} className="bg-gray-800 text-white px-6 py-2 rounded-lg shadow-md hover:bg-gray-900 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1">
-              {passwordSaving ? 'Updating...' : 'Update Password'}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );
+
+  const [sickLeaveModal, setSickLeaveModal] = useState({ open: false, employeeId: null, employeeName: '', startDate: '', endDate: '', reason: '' });
+
+  const handleOpenSickLeave = (user) => {
+    setSickLeaveModal({ open: true, employeeId: user.id, employeeName: user.name, startDate: '', endDate: '', reason: '' });
+  };
+
+  const handleSickLeaveSubmit = async (e) => {
+    e.preventDefault();
+    if (!sickLeaveModal.employeeId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/hr/employees/${sickLeaveModal.employeeId}/leaves/create-approved`, {
+        start_date: sickLeaveModal.startDate,
+        end_date: sickLeaveModal.endDate,
+        reason: sickLeaveModal.reason
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      setSuccess(`Sick leave added for ${sickLeaveModal.employeeName}`);
+      setSickLeaveModal({ open: false, employeeId: null, employeeName: '', startDate: '', endDate: '', reason: '' });
+      setTimeout(() => setSuccess(''), 3000);
+      fetchLeaveApplications(); // refresh leave list
+      fetchAnalytics(); // refresh stats
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to add sick leave');
+    }
+  };
+
+  const handleSickLeaveDateChange = (field, value) => {
+    const dateObj = new Date(value);
+    const day = dateObj.getDay();
+    if (day === 0 || day === 6) {
+      alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
+      return;
+    }
+    setSickLeaveModal(prev => ({ ...prev, [field]: value }));
+  };
+
+  const renderSickLeaveModal = () => {
+    if (!sickLeaveModal.open) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+          <h3 className="text-lg font-bold mb-4">Add Sick Leave for {sickLeaveModal.employeeName}</h3>
+          <form onSubmit={handleSickLeaveSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Start Date</label>
+              <input type="date" required value={sickLeaveModal.startDate} onChange={e => handleSickLeaveDateChange('startDate', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">End Date</label>
+              <input type="date" required min={sickLeaveModal.startDate} value={sickLeaveModal.endDate} onChange={e => handleSickLeaveDateChange('endDate', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reason</label>
+              <textarea required value={sickLeaveModal.reason} onChange={e => setSickLeaveModal(prev => ({ ...prev, reason: e.target.value }))} className="w-full border rounded px-3 py-2" rows="3"></textarea>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setSickLeaveModal({ ...sickLeaveModal, open: false })} className="px-4 py-2 border rounded hover:bg-gray-100">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Add Leave</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
 
   /* ---------- Main render ---------- */
 
@@ -1477,14 +1715,37 @@ function HrDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           {/* Filters */}
           <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between">
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col md:flex-row gap-4">
               <input
                 type="text"
                 placeholder="Search audit logs..."
-                className="w-full border rounded-md px-3 py-2"
+                className="flex-1 border rounded-md px-3 py-2"
                 value={auditSearch}
                 onChange={(e) => setAuditSearch(e.target.value)}
               />
+              <div className="flex gap-2 items-center">
+                <input
+                  type="date"
+                  className="border rounded-md px-3 py-2"
+                  value={auditDateRange.start}
+                  onChange={(e) => setAuditDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  placeholder="Start Date"
+                />
+                <span className="text-gray-400">-</span>
+                <input
+                  type="date"
+                  className="border rounded-md px-3 py-2"
+                  value={auditDateRange.end}
+                  onChange={(e) => setAuditDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  placeholder="End Date"
+                />
+                <button
+                  onClick={() => handleDownloadReport('audit_logs')}
+                  className="bg-indigo-600 text-white px-3 py-2 rounded-md hover:bg-indigo-700 whitespace-nowrap"
+                >
+                  Download CSV
+                </button>
+              </div>
             </div>
             <div className="flex gap-4">
               <select
@@ -1528,7 +1789,7 @@ function HrDashboard() {
                   auditLogs.map((log) => (
                     <tr key={log.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(log.created_at).toLocaleString()}
+                        {formatDate(log.created_at, 'datetime')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {log.user_name || log.user_email || 'System'}
@@ -1637,7 +1898,7 @@ function HrDashboard() {
                   workHoursLogs.map((log) => (
                     <tr key={log.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(log.date).toLocaleDateString()}
+                        {formatDate(log.date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="font-medium">{log.employee_name}</div>
@@ -1711,17 +1972,33 @@ function HrDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 p-6 overflow-y-auto">
-        {activeTab === TABS.DASHBOARD && renderDashboard()}
-        {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
-        {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
-        {activeTab === TABS.APPLY_LEAVE && renderApplyLeave()}
-        {activeTab === TABS.CALENDAR && renderCalendar()}
-        {activeTab === TABS.ANALYTICS && renderAnalytics()}
-        {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
-        {activeTab === TABS.WORK_HOURS && renderWorkHours()}
-        {activeTab === TABS.SETTINGS && renderSettings()}
-      </main>
+      <div className="flex-1 flex flex-col">
+        {/* Top Header */}
+        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-gray-900 capitalize">
+              {activeTab.replace(/([A-Z])/g, ' $1').trim()}
+            </h2>
+            <p className="text-xs text-gray-500">
+              Signed in as {user?.name || user?.email} ({user?.role})
+            </p>
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 overflow-y-auto">
+          {activeTab === TABS.DASHBOARD && renderDashboard()}
+          {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
+          {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+          {activeTab === TABS.APPLY_LEAVE && renderApplyLeave()}
+          {activeTab === TABS.CALENDAR && renderCalendar()}
+          {activeTab === TABS.ANALYTICS && renderAnalytics()}
+          {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
+          {activeTab === TABS.WORK_HOURS && renderWorkHours()}
+          {activeTab === TABS.SETTINGS && renderSettings()}
+          {renderSickLeaveModal()}
+        </main>
+      </div>
     </div>
   );
 }

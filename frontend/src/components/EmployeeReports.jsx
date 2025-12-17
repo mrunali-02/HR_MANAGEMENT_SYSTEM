@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { formatDate } from '../utils/dateUtils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -166,7 +167,21 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             Department: e.department,
             Status: e.status
         }));
-        const ws = XLSX.utils.json_to_sheet(dataForExcel);
+        const formattedData = dataForExcel.map(item => {
+            const formattedItem = {};
+            Object.keys(item).forEach(key => {
+                let val = item[key];
+                if (typeof val === 'string' && (key.includes('date') || key.includes('joined_on') || key.includes('dob') || key.includes('created_at'))) {
+                    if (val.match(/^\d{4}-\d{2}-\d{2}/)) {
+                        val = formatDate(val);
+                    }
+                }
+                formattedItem[key] = val;
+            });
+            return formattedItem;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(formattedData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Employees_By_Role");
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

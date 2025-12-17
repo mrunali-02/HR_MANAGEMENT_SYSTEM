@@ -1,9 +1,11 @@
+
 // src/components/ManagerDashboard.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { formatDate } from '../utils/dateUtils';
 import { Bell } from 'lucide-react';
 import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
@@ -96,7 +98,7 @@ function ManagerDashboard() {
   const getAuthHeader = () => {
     const token = localStorage.getItem('token');
     return {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${token} `,
     };
   };
 
@@ -106,7 +108,7 @@ function ManagerDashboard() {
 
     try {
       // 1) Manager profile (Enhanced)
-      const profileRes = await axios.get(`${API_BASE_URL}/manager/${id}`, {
+      const profileRes = await axios.get(`${API_BASE_URL} /manager/${id} `, {
         headers: getAuthHeader(),
       });
       setManagerProfile(profileRes.data); // Use new state variable
@@ -115,10 +117,10 @@ function ManagerDashboard() {
       // 2) Team data
       try {
         const [attendanceRes, workRes, leavesRes, statsRes] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/manager/team/attendance`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL}/manager/team/work-hours`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL}/manager/team/leave-requests`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL}/manager/team/stats`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL} /manager/team / attendance`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL} /manager/team / work - hours`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL} /manager/team / leave - requests`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL} /manager/team / stats`, { headers: getAuthHeader() }),
         ]);
 
         if (attendanceRes.status === 'fulfilled') {
@@ -548,7 +550,7 @@ function ManagerDashboard() {
                   <td className="px-4 py-2 text-sm text-gray-900">
                     {a.employee_name || a.employee_email || a.user_id}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-500">{a.date}</td>
+                  <td className="px-4 py-2 text-sm text-gray-500">{formatDate(a.date)}</td>
                   <td className="px-4 py-2 text-sm text-gray-500 capitalize">
                     {a.status || '-'}
                   </td>
@@ -612,7 +614,7 @@ function ManagerDashboard() {
                   <td className="px-4 py-2 text-sm text-gray-900">
                     {h.employee_name || h.employee_email || h.user_id}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-500">{h.date}</td>
+                  <td className="px-4 py-2 text-sm text-gray-500">{formatDate(h.date)}</td>
                   <td className="px-4 py-2 text-sm text-gray-500">
                     {h.hours || '-'}
                   </td>
@@ -696,7 +698,7 @@ function ManagerDashboard() {
                       {la.type}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {la.start_date} → {la.end_date}
+                      {formatDate(la.start_date)} → {formatDate(la.end_date)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
                       {la.days || calculateDays(la.start_date, la.end_date)}
@@ -910,6 +912,7 @@ function ManagerDashboard() {
               <option value="sick">Sick Leave</option>
               <option value="casual">Casual Leave</option>
               <option value="paid">Planned Leave</option>
+              <option value="work_from_home">Work From Home</option>
             </select>
           </div>
 
@@ -1762,7 +1765,8 @@ function ManagerDashboard() {
         {/* Top bar */}
         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-gray-900">
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.ATTENDANCE && 'Team Attendance'}
               {activeTab === TABS.WORK_HOURS && 'Work Hours'}
@@ -1770,7 +1774,7 @@ function ManagerDashboard() {
               {activeTab === TABS.APPLY_LEAVE && 'Apply Leave'}
               {activeTab === TABS.REPORTS && 'Team Reports'}
               {activeTab === TABS.PROFILE && 'Profile'}
-            </h1>
+            </h2>
             <p className="text-xs text-gray-500">
               Signed in as {managerUser?.name || managerUser?.email} (
               {managerUser?.role})

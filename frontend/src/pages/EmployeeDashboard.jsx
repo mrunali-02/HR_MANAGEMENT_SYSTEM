@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -5,6 +6,7 @@ import axios from 'axios';
 import './EmployeeDashboard.css';
 import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
+import { formatDate } from '../utils/dateUtils';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -692,12 +694,13 @@ function EmployeeDashboard() {
         {/* Top Header */}
         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-gray-900">
               {activeTab === 'dashboard' ? 'Overview' :
                 activeTab === 'attendance' ? 'Attendance History' :
                   activeTab === 'calendar' ? 'Calendar' :
                     activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
-            </h1>
+            </h2>
             <p className="text-xs text-gray-500">
               Welcome back, {profile?.user?.name || 'Employee'}
             </p>
@@ -798,7 +801,7 @@ function EmployeeDashboard() {
                   <div>
                     <div className="text-sm uppercase tracking-wide opacity-80">Leave Balance</div>
                     <div className="mt-2 text-3xl font-bold">
-                      {leaveBalance.total - leaveBalance.used}/{leaveBalance.total}
+                      {(leaveBalance.sick || 0) + (leaveBalance.casual || 0) + (leaveBalance.paid || 0)}/24
                     </div>
                     <div className="mt-1 text-xs opacity-80">
                       Days Remaining
@@ -948,7 +951,7 @@ function EmployeeDashboard() {
                       {attendanceRecords.map((rec) => (
                         <tr key={rec.date} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            {new Date(rec.date).toLocaleDateString()}
+                            {formatDate(rec.date)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${rec.status === 'present'
@@ -1031,6 +1034,7 @@ function EmployeeDashboard() {
                       <option value="sick">Sick Leave</option>
                       <option value="casual">Casual Leave</option>
                       <option value="paid">Planned Leave</option>
+                      <option value="work_from_home">Work From Home</option>
                     </select>
 
                   </div>
@@ -1128,8 +1132,8 @@ function EmployeeDashboard() {
                       {leaveHistory.map((l) => (
                         <tr key={l.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">{l.type}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{l.start_date}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{l.end_date}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(l.start_date)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(l.end_date)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-semibold">
                             {l.days || calculateLeaveDays(l.start_date, l.end_date)}
                           </td>
@@ -1200,15 +1204,15 @@ function EmployeeDashboard() {
                       { label: 'Email', value: settingsForm.email },
                       { label: 'Role', value: settingsForm.role },
                       { label: 'Department', value: settingsForm.department },
-                      { label: 'Date of Joining', value: settingsForm.joined_on },
-                      { label: 'Date of Birth', value: settingsForm.dob },
+                      { label: 'Date of Joining', value: settingsForm.joined_on, format: true },
+                      { label: 'Date of Birth', value: settingsForm.dob, format: true },
                       { label: 'Gender', value: settingsForm.gender },
                       { label: 'Blood Group', value: settingsForm.blood_group }
                     ].map((field) => (
                       <div key={field.label}>
                         <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{field.label}</label>
                         <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">
-                          {field.value || '-'}
+                          {field.format && field.value ? formatDate(field.value) : field.value || '-'}
                         </div>
                       </div>
                     ))}

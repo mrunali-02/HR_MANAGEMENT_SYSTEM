@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
+import { formatDate } from '../utils/dateUtils';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -550,7 +551,17 @@ function AdminDashboard() {
     const headers = Object.keys(data[0]);
     const csvContent = [
       headers.join(','),
-      ...data.map(row => headers.map(header => JSON.stringify(row[header] || '')).join(','))
+      ...data.map(row => headers.map(header => {
+        let val = row[header] || '';
+        // If the header suggests a date field, try to format it
+        if (typeof val === 'string' && (header.includes('date') || header.includes('joined_on') || header.includes('dob'))) {
+          // check if it looks like a date (simple check)
+          if (val.match(/^\d{4}-\d{2}-\d{2}/)) {
+            val = formatDate(val);
+          }
+        }
+        return JSON.stringify(val);
+      }).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -921,7 +932,7 @@ function AdminDashboard() {
                     {u.role}
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                    {u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}
+                    {formatDate(u.joined_on)}
                   </td>
                 </tr>
               ))}
@@ -1386,7 +1397,7 @@ function AdminDashboard() {
                       {u.phone || '-'}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {u.joined_on ? new Date(u.joined_on).toLocaleDateString() : '-'}
+                      {formatDate(u.joined_on)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -1395,7 +1406,7 @@ function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
+                      {formatDate(u.created_at)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-right text-sm">
                       {u.id !== user?.id && (
@@ -1422,16 +1433,12 @@ function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div >
+        </div >
+      </div>
     );
   }
   const renderLeaveApplications = () => {
-    // Sort by leave type
-    const sortedLeaves = [...leaveApplications].sort((a, b) => {
-      const typeOrder = { 'planned': 1, 'casual': 2, 'sick': 3 };
-      return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
-    });
+    const sortedLeaves = leaveApplications;
 
     const handleLeaveRowClick = (leave) => {
       setSelectedLeave(leave);
@@ -1526,7 +1533,7 @@ function AdminDashboard() {
                       {la.type === 'paid' ? 'Planned' : la.type}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {la.start_date ? la.start_date.substring(0, 10) : ''} â†’ {la.end_date ? la.end_date.substring(0, 10) : ''}
+                      {formatDate(la.start_date)} &rarr; {formatDate(la.end_date)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 font-semibold">
                       {la.days || calculateDays(la.start_date, la.end_date)}
@@ -1624,11 +1631,11 @@ function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.start_date ? selectedLeave.start_date.substring(0, 10) : ''}</p>
+                      <p className="mt-1 text-sm text-gray-900">{formatDate(selectedLeave.start_date)}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">End Date</label>
-                      <p className="mt-1 text-sm text-gray-900">{selectedLeave.end_date ? selectedLeave.end_date.substring(0, 10) : ''}</p>
+                      <p className="mt-1 text-sm text-gray-900">{formatDate(selectedLeave.end_date)}</p>
                     </div>
                   </div>
                   <div>
@@ -2395,7 +2402,8 @@ function AdminDashboard() {
         {/* Top bar */}
         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-gray-900">
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
@@ -2403,7 +2411,7 @@ function AdminDashboard() {
               {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
               {activeTab === TABS.REPORTS && 'Reports'}
               {activeTab === TABS.SETTINGS && 'Settings'}
-            </h1>
+            </h2>
             <p className="text-xs text-gray-500">
               Signed in as {user?.name || user?.email} ({user?.role})
             </p>

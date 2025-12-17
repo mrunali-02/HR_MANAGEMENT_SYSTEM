@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { formatDate } from '../utils/dateUtils';
 
 const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calendarStats, onMonthChange }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -76,7 +77,7 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
             else if (isWeekend) bgColor = 'bg-gray-200';
             else if (!isAdminOrHr) {
                 // Regular user coloring logic
-                if (status === 'present') bgColor = 'bg-green-100';
+                if (status === 'present' || status === 'remote') bgColor = 'bg-green-100';
                 else if (status === 'absent') bgColor = 'bg-red-100';
                 else if (['casual', 'sick', 'earned', 'paid'].includes(status)) bgColor = 'bg-yellow-100';
             }
@@ -222,11 +223,14 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
             {selectedDayDetails && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
-                        <div className="flex justify-between items-center p-4 border-b">
-                            <h3 className="text-lg font-bold text-gray-900">
-                                Details for {new Date(selectedDayDetails.date).toDateString()}
+                        <div className="flex justify-between items-center mb-4 p-4 border-b">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                Details for {formatDate(selectedDayDetails.date)}
                             </h3>
-                            <button onClick={() => setSelectedDayDetails(null)} className="text-gray-500 hover:text-gray-700">
+                            <button
+                                onClick={() => setSelectedDayDetails(null)}
+                                className="text-gray-400 hover:text-gray-500"
+                            >
                                 <X size={20} />
                             </button>
                         </div>

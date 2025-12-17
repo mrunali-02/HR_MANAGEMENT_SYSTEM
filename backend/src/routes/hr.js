@@ -17,7 +17,9 @@ import {
   getWorkHoursStats,
   getAuditLogs,
   getAllAttendanceRecords,
-  getCalendarSummary
+  getCalendarSummary,
+  createApprovedLeave,
+  exportAuditLogs
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -32,6 +34,7 @@ router.get('/users', getUsers);
 router.get('/managers', getManagers);
 router.put('/employees/:employeeId/assign-manager', assignManager);
 router.delete('/users/:id', deleteUser);
+router.post('/employees/:employeeId/leaves/create-approved', createApprovedLeave);
 router.get('/leave-requests', getLeaveRequests);
 router.put('/leave-requests/:id/approve', approveLeaveRequest);
 router.put('/leave-requests/:id/reject', rejectLeaveRequest);
@@ -48,5 +51,6 @@ router.get('/reports/leaves', getLeaveReport);
 router.get('/export/attendance', exportAttendance);
 router.get('/export/leaves', exportLeaves);
 router.get('/export/employees', exportEmployees);
+router.get('/export/audit-logs', exportAuditLogs);
 
 export default router;
