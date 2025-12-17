@@ -34,13 +34,7 @@ const TABS = {
 
 const SETTINGS_TABS = {
   ACCOUNT: 'account',
-  ATTENDANCE: 'attendance',
-  WORK_HOURS: 'workHours',
-  LEAVE_POLICY: 'leavePolicy',
   SECURITY: 'security',
-  REPORTS: 'reports',
-  NOTIFICATIONS: 'notifications',
-  COMPANY: 'company',
 };
 
 function AdminDashboard() {
@@ -102,7 +96,7 @@ function AdminDashboard() {
     emergency_contact: '',
   });
 
-  // âœ… Settings state moved to top-level (not inside renderSettings)
+  // ✅ Settings state moved to top-level (not inside renderSettings)
   const [profileInfo, setProfileInfo] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -146,48 +140,22 @@ function AdminDashboard() {
   // Settings State
   const [settingsActiveTab, setSettingsActiveTab] = useState(SETTINGS_TABS.ACCOUNT);
   const [settings, setSettings] = useState({
-    attendance: {
-      autoAttendance: true,
-      allowManualAttendance: true,
-      geoFenceRange: 100,
-      requireGPS: true,
-      attendanceCutoffTime: '10:00',
-    },
-    workHours: {
-      maxWorkHoursPerDay: 9,
-    },
-    leavePolicy: {
-      annualLeave: 20,
-      sickLeave: 10,
-      carryForward: true,
-      maxLeavePerRequest: 14,
-      autoApproveIfLessThanHours: false,
-    },
     security: {
       passwordMinLength: 8,
       passwordExpireInDays: 90,
       maxLoginAttempts: 5,
       enableTwoFactorAuth: false,
       enableRememberMe: true,
+      enableRememberMe: true,
     },
-    reports: {
-      defaultExportFormat: 'PDF',
-      allowScheduledReports: true,
-      reportRetentionDays: 365,
-    },
-    notifications: {
-      notifyHRForLeaveRequests: true,
-      notifyEmployeeOnApproval: true,
-      enableEmailAlerts: true,
-      enableSMSAlerts: false,
-    },
-    company: {
-      companyName: 'TechCorp Solutions',
-      timeZone: 'UTC',
-      dateFormat: 'YYYY-MM-DD',
-      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-    }
   });
+
+  // Calendar & Attendance State
+  const [calendarStats, setCalendarStats] = useState({});
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   const handleSettingChange = (category, field, value) => {
     setSettings(prev => ({
@@ -237,8 +205,10 @@ function AdminDashboard() {
       fetchLeaveApplications(),
       fetchSettings(),
       fetchDashboardSummary(),
+      fetchDashboardSummary(),
       fetchNotes(),
-      fetchHolidays() // [NEW]
+      fetchHolidays(),
+      fetchMyAttendance()
     ]).finally(() => {
       setLoading(false);
     });
@@ -507,7 +477,163 @@ function AdminDashboard() {
     if (activeTab === TABS.REPORTS) {
       fetchDetailedReports();
     }
+    if (activeTab === TABS.CALENDAR) {
+      fetchCalendarSummary();
+    }
   }, [activeTab, auditPage, auditSortBy, auditSortOrder, auditSearch, attendanceFilter, leaveFilter]);
+
+  const fetchCalendarSummary = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const now = new Date();
+      // Using HR endpoint which is accessible to Admin
+      const res = await axios.get(`${API_BASE_URL}/hr/calendar-summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          month: now.getMonth() + 1,
+          year: now.getFullYear()
+        }
+      });
+      setCalendarStats(res.data || {});
+    } catch (err) {
+      console.error('Fetch calendar summary error:', err);
+    }
+  };
+
+  const fetchMyAttendance = async () => {
+    if (!user?.id) return;
+    try {
+      const token = localStorage.getItem('token');
+      // Using Employee endpoint which is accessible to any authenticated user for their own ID
+      const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/attendance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAttendanceRecords(res.data.records || []);
+      setTodayAttendance(res.data.today || null);
+      setAttendanceMarked(res.data.today?.status === 'present');
+      setCheckoutMarked(!!res.data.today?.check_out);
+    } catch (err) {
+      console.error('Error fetching my attendance:', err);
+    }
+  };
+
+  const handleMarkAttendance = async () => {
+    if (attendanceMarked || todayAttendance?.status === 'present') return;
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    const confirmCheckIn = window.confirm(
+      'This will capture your current location for attendance. Proceed?'
+    );
+    if (!confirmCheckIn) return;
+
+    setSuccess('Fetching location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+
+          await axios.post(
+            `${API_BASE_URL}/employee/${user.id}/attendance/mark`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          setSuccess('Checked in successfully!');
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          console.error('Error marking attendance:', err);
+          let errorMsg = err.response?.data?.error || 'Check-in failed';
+          if (errorMsg.includes('already')) {
+            fetchMyAttendance();
+          }
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          setSuccess('');
+          setTimeout(() => setError(''), 5000);
+        }
+      },
+      (geoError) => {
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+        setTimeout(() => setError(''), 5000);
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+    );
+  };
+
+  const handleCheckout = async () => {
+    if (!attendanceMarked || !todayAttendance?.check_in || checkoutMarked) return;
+
+    setError('');
+    setSuccess('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    const confirmCheckout = window.confirm(
+      'This will capture your current location for checkout. Proceed?'
+    );
+    if (!confirmCheckout) return;
+
+    setSuccess('Fetching location for checkout...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+          const token = localStorage.getItem('token');
+
+          const res = await axios.post(
+            `${API_BASE_URL}/employee/${user.id}/attendance/checkout`,
+            { latitude, longitude, accuracy },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          const hours = res.data.total_hours || '0';
+          setSuccess(`Checked out! Worked ${hours} hours.`);
+          fetchMyAttendance();
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+          let errorMsg = err.response?.data?.error || 'Checkout failed';
+          if (err.response?.data?.distance) {
+            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+          }
+          setError(errorMsg);
+          setSuccess('');
+          setTimeout(() => setError(''), 5000);
+        }
+      },
+      (geoError) => {
+        let msg = 'Unable to retrieve location.';
+        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+        else if (geoError.code === 2) msg = 'Location unavailable.';
+        else if (geoError.code === 3) msg = 'Location request timed out.';
+        setError(msg);
+        setSuccess('');
+        setTimeout(() => setError(''), 5000);
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+    );
+  };
+
 
   const fetchDetailedReports = async () => {
     try {
@@ -1896,15 +2022,32 @@ function AdminDashboard() {
 
   const renderCalendar = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Calendar & Holidays</h2>
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+        <h2 className="text-2xl font-bold text-gray-800">My Attendance & Holidays</h2>
+        <div className="flex gap-2">
+          {!attendanceMarked ? (
+            <button onClick={handleMarkAttendance} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold">Check In</button>
+          ) : (
+            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
+          )}
+          {attendanceMarked && !checkoutMarked && (
+            <button onClick={handleCheckout} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold">Check Out</button>
+          )}
+          {checkoutMarked && (
+            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
+          )}
+        </div>
       </div>
+
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <p className="mb-4 text-sm text-gray-600">Click on any date to mark/unmark a holiday.</p>
+        <p className="mb-4 text-sm text-gray-600">Click on a date to manage holidays.</p>
         <CalendarView
+          attendance={attendanceRecords}
           holidays={holidays}
           role="admin"
           onDateClick={handleToggleHoliday}
+          calendarStats={calendarStats}
+          onMonthChange={fetchCalendarSummary}
         />
       </div>
     </div>
@@ -1993,133 +2136,6 @@ function AdminDashboard() {
       </div>
     );
 
-    const renderAttendanceSettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Attendance Configuration</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Auto Attendance (Check-in/out)</label>
-            <input
-              type="checkbox"
-              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              checked={settings.attendance.autoAttendance}
-              onChange={(e) => handleSettingChange('attendance', 'autoAttendance', e.target.checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Allow Manual Attendance</label>
-            <input
-              type="checkbox"
-              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              checked={settings.attendance.allowManualAttendance}
-              onChange={(e) => handleSettingChange('attendance', 'allowManualAttendance', e.target.checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Require GPS Location</label>
-            <input
-              type="checkbox"
-              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              checked={settings.attendance.requireGPS}
-              onChange={(e) => handleSettingChange('attendance', 'requireGPS', e.target.checked)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Geo-Fence Range (meters)</label>
-            <input
-              type="number"
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-              value={settings.attendance.geoFenceRange}
-              onChange={(e) => handleSettingChange('attendance', 'geoFenceRange', parseInt(e.target.value))}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Attendance Cutoff Time</label>
-            <input
-              type="time"
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-              value={settings.attendance.attendanceCutoffTime}
-              onChange={(e) => handleSettingChange('attendance', 'attendanceCutoffTime', e.target.value)}
-            />
-          </div>
-          <button
-            onClick={() => saveSettings('attendance')}
-            className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-          >
-            Save Attendance Settings
-          </button>
-        </div>
-      </div>
-    );
-
-    const renderWorkHoursSettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Work Hours & Overtime</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Max Work Hours Per Day</label>
-            <input type="number" className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-              value={settings.workHours.maxWorkHoursPerDay}
-              onChange={(e) => handleSettingChange('workHours', 'maxWorkHoursPerDay', parseFloat(e.target.value))} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Overtime Rate Multiplier</label>
-            <input type="number" step="0.1" className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-              value={settings.workHours.overtimeRateMultiplier}
-              onChange={(e) => handleSettingChange('workHours', 'overtimeRateMultiplier', parseFloat(e.target.value))} />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Allow Overtime Submission</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.workHours.allowOvertimeSubmission}
-              onChange={(e) => handleSettingChange('workHours', 'allowOvertimeSubmission', e.target.checked)} />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Require Reason for Overtime</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.workHours.requireReasonForOvertime}
-              onChange={(e) => handleSettingChange('workHours', 'requireReasonForOvertime', e.target.checked)} />
-          </div>
-          <button onClick={() => saveSettings('workHours')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Work Settings</button>
-        </div>
-      </div>
-    );
-
-    const renderLeavePolicySettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Leave Policy</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Annual Leave (Days)</label>
-              <input type="number" className="mt-1 block w-full border rounded-md p-2"
-                value={settings.leavePolicy.annualLeave}
-                onChange={(e) => handleSettingChange('leavePolicy', 'annualLeave', parseInt(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Sick Leave (Days)</label>
-              <input type="number" className="mt-1 block w-full border rounded-md p-2"
-                value={settings.leavePolicy.sickLeave}
-                onChange={(e) => handleSettingChange('leavePolicy', 'sickLeave', parseInt(e.target.value))} />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Carry Forward Unused Leave</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.leavePolicy.carryForward}
-              onChange={(e) => handleSettingChange('leavePolicy', 'carryForward', e.target.checked)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Max Leave Per Request (Days)</label>
-            <input type="number" className="mt-1 block w-full border rounded-md p-2"
-              value={settings.leavePolicy.maxLeavePerRequest}
-              onChange={(e) => handleSettingChange('leavePolicy', 'maxLeavePerRequest', parseInt(e.target.value))} />
-          </div>
-          <button onClick={() => saveSettings('leavePolicy')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Leave Policy</button>
-        </div>
-      </div>
-    );
-
     const renderSecuritySettings = () => (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">System Security</h3>
@@ -2153,100 +2169,6 @@ function AdminDashboard() {
       </div>
     );
 
-    const renderReportsSettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Export & Reports</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Default Export Format</label>
-            <select className="mt-1 block w-full border rounded-md p-2"
-              value={settings.reports.defaultExportFormat}
-              onChange={(e) => handleSettingChange('reports', 'defaultExportFormat', e.target.value)}>
-              <option value="PDF">PDF</option>
-              <option value="CSV">CSV</option>
-              <option value="XLSX">Excel (XLSX)</option>
-            </select>
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Allow Scheduled Reports</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.reports.allowScheduledReports}
-              onChange={(e) => handleSettingChange('reports', 'allowScheduledReports', e.target.checked)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Report Retention (Days)</label>
-            <input type="number" className="mt-1 block w-full border rounded-md p-2"
-              value={settings.reports.reportRetentionDays}
-              onChange={(e) => handleSettingChange('reports', 'reportRetentionDays', parseInt(e.target.value))} />
-          </div>
-          <button onClick={() => saveSettings('reports')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Report Settings</button>
-        </div>
-      </div>
-    );
-
-    const renderNotificationsSettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Notification Preferences</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Notify HR for Leave Requests</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.notifications.notifyHRForLeaveRequests}
-              onChange={(e) => handleSettingChange('notifications', 'notifyHRForLeaveRequests', e.target.checked)} />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Notify Employee on Approval</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.notifications.notifyEmployeeOnApproval}
-              onChange={(e) => handleSettingChange('notifications', 'notifyEmployeeOnApproval', e.target.checked)} />
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Enable Email Alerts</label>
-            <input type="checkbox" className="h-5 w-5 text-indigo-600 rounded"
-              checked={settings.notifications.enableEmailAlerts}
-              onChange={(e) => handleSettingChange('notifications', 'enableEmailAlerts', e.target.checked)} />
-          </div>
-          <button onClick={() => saveSettings('notifications')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Notification Settings</button>
-        </div>
-      </div>
-    );
-
-    const renderCompanySettings = () => (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Company Configuration</h3>
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Company Name</label>
-            <input type="text" className="mt-1 block w-full border rounded-md p-2"
-              value={settings.company.companyName}
-              onChange={(e) => handleSettingChange('company', 'companyName', e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Time Zone</label>
-            <select className="mt-1 block w-full border rounded-md p-2"
-              value={settings.company.timeZone}
-              onChange={(e) => handleSettingChange('company', 'timeZone', e.target.value)}>
-              <option value="UTC">UTC</option>
-              <option value="EST">EST</option>
-              <option value="PST">PST</option>
-              <option value="IST">IST</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Date Format</label>
-            <select className="mt-1 block w-full border rounded-md p-2"
-              value={settings.company.dateFormat}
-              onChange={(e) => handleSettingChange('company', 'dateFormat', e.target.value)}>
-              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-            </select>
-          </div>
-          <button onClick={() => saveSettings('company')} className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save Company Settings</button>
-        </div>
-      </div>
-    );
-
     return (
       <div className="flex flex-col lg:flex-row gap-6 h-full">
         {/* Settings Navigation Sidebar */}
@@ -2257,13 +2179,7 @@ function AdminDashboard() {
           <nav className="flex flex-col">
             {Object.entries({
               [SETTINGS_TABS.ACCOUNT]: 'Account & Profile',
-              [SETTINGS_TABS.ATTENDANCE]: 'Attendance',
-              [SETTINGS_TABS.WORK_HOURS]: 'Work Hours & OT',
-              [SETTINGS_TABS.LEAVE_POLICY]: 'Leave Policy',
               [SETTINGS_TABS.SECURITY]: 'Security',
-              [SETTINGS_TABS.REPORTS]: 'Reports',
-              [SETTINGS_TABS.NOTIFICATIONS]: 'Notifications',
-              [SETTINGS_TABS.COMPANY]: 'Company Info'
             }).map(([key, label]) => (
               <button
                 key={key}
@@ -2293,13 +2209,7 @@ function AdminDashboard() {
           )}
 
           {settingsActiveTab === SETTINGS_TABS.ACCOUNT && renderAccountSettings()}
-          {settingsActiveTab === SETTINGS_TABS.ATTENDANCE && renderAttendanceSettings()}
-          {settingsActiveTab === SETTINGS_TABS.WORK_HOURS && renderWorkHoursSettings()}
-          {settingsActiveTab === SETTINGS_TABS.LEAVE_POLICY && renderLeavePolicySettings()}
           {settingsActiveTab === SETTINGS_TABS.SECURITY && renderSecuritySettings()}
-          {settingsActiveTab === SETTINGS_TABS.REPORTS && renderReportsSettings()}
-          {settingsActiveTab === SETTINGS_TABS.NOTIFICATIONS && renderNotificationsSettings()}
-          {settingsActiveTab === SETTINGS_TABS.COMPANY && renderCompanySettings()}
         </div>
       </div>
     );

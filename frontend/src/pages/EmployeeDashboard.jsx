@@ -286,7 +286,7 @@ function EmployeeDashboard() {
         setSuccess('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
     );
   };
 

@@ -320,7 +320,7 @@ function ManagerDashboard() {
         setError(msg);
         setSuccess('');
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
     );
   };
 

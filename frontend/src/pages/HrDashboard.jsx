@@ -598,7 +598,7 @@ function HrDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
     );
   };
 
@@ -662,7 +662,7 @@ function HrDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
     );
   };
 
