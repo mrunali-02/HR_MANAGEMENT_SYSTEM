@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { formatDate } from '../utils/dateUtils';
 
-const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calendarStats, onMonthChange }) => {
+const CalendarView = ({ attendance = [], holidays = [], leaves = [], onDateClick, role, calendarStats, onMonthChange }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDayDetails, setSelectedDayDetails] = useState(null);
 
@@ -38,6 +38,24 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
         attendanceMap[a.date] = a.status; // 'present', 'absent', etc.
     });
 
+    // Process leaves into a map
+    const leaveMap = {};
+    leaves.forEach(l => {
+        if (l.status === 'approved') {
+            const start = new Date(l.start_date);
+            const end = new Date(l.end_date);
+
+            // Loop through days
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const dateKey = `${year}-${month}-${day}`;
+                leaveMap[dateKey] = l.type; // 'sick', 'casual', 'paid'
+            }
+        }
+    });
+
     const holidayMap = {};
     holidays.forEach(h => {
         let dateKey = h.date;
@@ -64,7 +82,10 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
 
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const status = attendanceMap[dateStr];
+            const attStatus = attendanceMap[dateStr];
+            const leaveType = leaveMap[dateStr];
+            const status = attStatus || leaveType; // Prioritize attendance check-in, but use leave if no attendance
+
             const isHoliday = holidayMap[dateStr];
             const dateObj = new Date(year, month, d);
             const dayOfWeek = dateObj.getDay();
@@ -74,13 +95,10 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
 
             let bgColor = 'bg-white';
             if (isHoliday) bgColor = 'bg-gray-300';
+            else if (attStatus === 'present' || attStatus === 'remote') bgColor = 'bg-green-100';
+            else if (attStatus === 'absent') bgColor = 'bg-red-100';
+            else if (leaveType) bgColor = 'bg-yellow-100'; // Any approved leave
             else if (isWeekend) bgColor = 'bg-gray-200';
-            else if (!isAdminOrHr) {
-                // Regular user coloring logic
-                if (status === 'present' || status === 'remote') bgColor = 'bg-green-100';
-                else if (status === 'absent') bgColor = 'bg-red-100';
-                else if (['casual', 'sick', 'earned', 'paid'].includes(status)) bgColor = 'bg-yellow-100';
-            }
 
             days.push(
                 <div
@@ -181,28 +199,25 @@ const CalendarView = ({ attendance = [], holidays = [], onDateClick, role, calen
 
             {/* Legend */}
             <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap gap-4 text-xs">
-                {role === 'employee' ? (
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-green-100 border border-green-200 block"></span> Present
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-100 border border-red-200 block"></span> Absent
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-yellow-100 border border-yellow-200 block"></span> Leave
+                </div>
+                {role !== 'employee' && (
                     <>
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 bg-green-100 border border-green-200 block"></span> Present
+                        <div className="flex items-center gap-2 border-l pl-4 ml-2 border-gray-300">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Present (Team)
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 bg-red-100 border border-red-200 block"></span> Absent
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Absent (Team)
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 bg-yellow-100 border border-yellow-200 block"></span> Leave
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Present Count
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Absent Count
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div> Leave Count
+                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div> Leave (Team)
                         </div>
                     </>
                 )}

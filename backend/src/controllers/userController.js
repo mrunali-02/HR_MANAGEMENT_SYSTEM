@@ -128,10 +128,10 @@ export async function getAttendance(req, res) {
     END,
     '00:00'
   ) AS total_hours_calc,
+  wh.is_late,
+  wh.is_left_early
 
-  COALESCE(
-    '00:00'
-  ) AS overtime_hours_calc
+
 `;
 
 
@@ -171,7 +171,9 @@ export async function getAttendance(req, res) {
       check_out: formatTime(row.check_out_time),
       // just use the string, DO NOT parseFloat
       total_hours: row.total_hours_calc,
-      overtime_hours: row.overtime_hours_calc
+
+      is_late: !!row.is_late,
+      is_left_early: !!row.is_left_early
     });
 
 
@@ -567,57 +569,7 @@ export async function changePassword(req, res) {
   }
 }
 
-/* ======================
-     OVERTIME MANAGEMENT
-====================== */
-export async function getOvertimes(req, res) {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    if (!isSelfOrAdmin(req.user, userId)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
-    const [overtimes] = await db.execute(
-      `SELECT id, work_date, hours, description, status, created_at
-       FROM overtimes
-       WHERE user_id = ?
-       ORDER BY work_date DESC`,
-      [userId]
-    );
-
-    res.json({ overtimes });
-  } catch (error) {
-    console.error('Get overtimes error:', error);
-    res.status(500).json({ error: 'Failed to fetch overtimes' });
-  }
-}
-
-export async function createOvertime(req, res) {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    if (!isSelfOrAdmin(req.user, userId)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const { work_date, hours, description } = req.body;
-    if (!work_date || !hours) {
-      return res.status(400).json({ error: 'Work date and hours are required' });
-    }
-
-    await db.execute(
-      `INSERT INTO overtimes (user_id, work_date, hours, description, status)
-       VALUES (?, ?, ?, ?, 'pending')`,
-      [userId, work_date, hours, description || null]
-    );
-
-    await logAudit(userId, 'overtime_requested', { work_date, hours });
-    await createNotification(userId, `Overtime request submitted for ${work_date}`);
-    res.status(201).json({ message: 'Overtime request submitted' });
-  } catch (error) {
-    console.error('Create overtime error:', error);
-    res.status(500).json({ error: 'Failed to create overtime request' });
-  }
-}
 
 /* ======================
      ATTENDANCE CORRECTIONS
@@ -771,15 +723,23 @@ export async function markCheckout(req, res) {
     const totalHours = parseFloat(totalHoursDecimal.toFixed(2));
     const overtimeHours = 0; // Overtime removed from project
 
+    // Calculate Late and Left Early
+    // Check In > 10:00:00
+    const isLate = att.check_in_time > '10:00:00';
+    // Check Out < 19:00:00 (7 PM)
+    const isLeftEarly = nowTime < '19:00:00';
+
     // Insert or update work_hours record
     await db.execute(
       `INSERT INTO work_hours 
-       (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours, overtime_hours)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+       (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours, overtime_hours, is_late, is_left_early)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
        check_out_time = VALUES(check_out_time),
        total_hours = VALUES(total_hours),
        overtime_hours = VALUES(overtime_hours),
+       is_late = VALUES(is_late),
+       is_left_early = VALUES(is_left_early),
        updated_at = CURRENT_TIMESTAMP`,
       [
         userId,
@@ -788,7 +748,9 @@ export async function markCheckout(req, res) {
         att.check_in_time,
         nowTime,
         totalHours,
-        overtimeHours
+        overtimeHours,
+        isLate,
+        isLeftEarly
       ]
     );
 

@@ -48,8 +48,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+import { initAttendanceCron } from './cron/attendanceJobs.js';
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+
+  // Initialize Cron Jobs
+  initAttendanceCron();
 });
 

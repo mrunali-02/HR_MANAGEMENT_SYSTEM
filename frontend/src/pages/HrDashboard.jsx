@@ -429,6 +429,24 @@ function HrDashboard() {
   const handleDownloadReport = async (type) => {
     try {
       const token = localStorage.getItem('token');
+
+      // Special handling for Excel export
+      if (type === 'work_hours_excel') {
+        const res = await axios.get(`${API_BASE_URL}/hr/export/work-hours-excel`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { ...workHoursDateRange, search: workHoursSearch },
+          responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Work_Hours_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+
       let endpoint = '';
       let filename = '';
       switch (type) {
@@ -1423,6 +1441,7 @@ function HrDashboard() {
         <CalendarView
           attendance={attendanceRecords}
           holidays={holidays}
+          leaves={myLeaveHistory}
           role="hr"
           onDateClick={handleToggleHoliday}
           calendarStats={calendarStats}
@@ -1639,6 +1658,14 @@ function HrDashboard() {
     e.preventDefault();
     if (!sickLeaveModal.employeeId) return;
 
+    // [NEW] Validate weekends
+    const startD = new Date(sickLeaveModal.startDate);
+    const endD = new Date(sickLeaveModal.endDate);
+    if (startD.getDay() === 0 || startD.getDay() === 6 || endD.getDay() === 0 || endD.getDay() === 6) {
+      alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       await axios.post(`${API_BASE_URL}/hr/employees/${sickLeaveModal.employeeId}/leaves/create-approved`, {
@@ -1658,12 +1685,7 @@ function HrDashboard() {
   };
 
   const handleSickLeaveDateChange = (field, value) => {
-    const dateObj = new Date(value);
-    const day = dateObj.getDay();
-    if (day === 0 || day === 6) {
-      alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
-      return;
-    }
+    // [MODIFIED] Removed blocking alert for weekends to allow calendar navigation
     setSickLeaveModal(prev => ({ ...prev, [field]: value }));
   };
 
@@ -1867,6 +1889,15 @@ function HrDashboard() {
                 placeholder="End Date"
               />
             </div>
+            <div className="flex items-end self-end mb-1">
+              <button
+                onClick={() => handleDownloadReport('work_hours_excel')}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Download Excel
+              </button>
+            </div>
           </div>
 
           {/* Table */}
@@ -1915,6 +1946,19 @@ function HrDashboard() {
                               'bg-gray-100 text-gray-800'}`}>
                           {log.status}
                         </span>
+                        {/* Late / Left Early Badges */}
+                        <div className="flex gap-1 mt-1">
+                          {log.is_late ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600 border border-red-200">
+                              Late
+                            </span>
+                          ) : null}
+                          {log.is_left_early ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200">
+                              Early Leave
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1986,7 +2030,7 @@ function HrDashboard() {
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
           {activeTab === TABS.APPLY_LEAVE && renderApplyLeave()}
-          {activeTab === TABS.CALENDAR && renderCalendar()}
+          {activeTab === TABS.CALENDAR && renderCalendar(myLeaveHistory)}
           {activeTab === TABS.ANALYTICS && renderAnalytics()}
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.WORK_HOURS && renderWorkHours()}

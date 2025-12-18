@@ -604,7 +604,7 @@ function ManagerDashboard() {
                   Total Hours
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Overtime
+                  Status
                 </th>
               </tr>
             </thead>
@@ -619,7 +619,21 @@ function ManagerDashboard() {
                     {h.hours || '-'}
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-500">
-                    {h.overtime_hours || '0'}
+                    <div className="flex gap-1 flex-wrap">
+                      {h.is_late ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                          Late
+                        </span>
+                      ) : null}
+                      {h.is_left_early ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                          Left Early
+                        </span>
+                      ) : null}
+                      {!h.is_late && !h.is_left_early && (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1159,6 +1173,7 @@ function ManagerDashboard() {
         <CalendarView
           attendance={myAttendanceRecords} // Show MY attendance, not team's
           holidays={holidays}
+          leaves={myLeaveHistory}
           role="manager"
           onDateClick={() => { }} // Managers can't edit holidays
         />

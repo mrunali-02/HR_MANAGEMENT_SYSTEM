@@ -18,6 +18,7 @@ import {
 import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
 import { formatDate } from '../utils/dateUtils';
+import { Save } from 'lucide-react';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -26,6 +27,7 @@ const TABS = {
   DASHBOARD: 'dashboard',
   EMPLOYEES: 'employees',
   LEAVE_APPLICATIONS: 'leaveApplications',
+  WORK_HOURS: 'workHours',
   REPORTS: 'reports',
   AUDIT_LOGS: 'auditLogs',
   CALENDAR: 'calendar',
@@ -75,6 +77,14 @@ function AdminDashboard() {
   const [tabSuccess, setTabSuccess] = useState({});
   const [reportData, setReportData] = useState({ attendance: [], leaves: [] });
   const [processingLeaveId, setProcessingLeaveId] = useState(null);
+
+  // Work Hours Logs State (Admin)
+  const [workHoursLogs, setWorkHoursLogs] = useState([]);
+  const [workHoursTotal, setWorkHoursTotal] = useState(0);
+  const [workHoursPage, setWorkHoursPage] = useState(1);
+  const [workHoursLimit] = useState(20);
+  const [workHoursSearch, setWorkHoursSearch] = useState('');
+  const [workHoursDateRange, setWorkHoursDateRange] = useState({ start: '', end: '' });
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -272,7 +282,60 @@ function AdminDashboard() {
     if (activeTab === TABS.REPORTS) {
       fetchReportData();
     }
-  }, [activeTab]);
+    if (activeTab === TABS.WORK_HOURS) {
+      fetchWorkHoursLogs();
+    }
+  }, [activeTab, workHoursPage, workHoursSearch, workHoursDateRange]);
+
+  /* ---------- Work Hours (Admin) ---------- */
+  const fetchWorkHoursLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/admin/attendance-records`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          limit: workHoursLimit,
+          page: workHoursPage,
+          search: workHoursSearch,
+          startDate: workHoursDateRange.start,
+          endDate: workHoursDateRange.end
+        }
+      });
+      setWorkHoursLogs(res.data.records || []);
+      setWorkHoursTotal(res.data.total || 0);
+    } catch (err) {
+      console.error('Fetch work hours logs error:', err);
+      // setTabErrors({ [TABS.WORK_HOURS]: 'Failed to fetch work hours' }); 
+      setWorkHoursLogs([]);
+    }
+  };
+
+  const downloadWorkHoursReport = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/admin/export/work-hours-excel`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          search: workHoursSearch,
+          startDate: workHoursDateRange.start,
+          endDate: workHoursDateRange.end
+        },
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Work_Hours_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download work hours report error:', err);
+      alert('Failed to download work hours report');
+    }
+  };
 
   const fetchReportData = async () => {
     try {
@@ -479,7 +542,10 @@ function AdminDashboard() {
     if (activeTab === TABS.CALENDAR) {
       fetchCalendarSummary();
     }
-  }, [activeTab, auditPage, auditSortBy, auditSortOrder, auditSearch, attendanceFilter, leaveFilter]);
+    if (activeTab === TABS.WORK_HOURS) {
+      fetchWorkHoursLogs();
+    }
+  }, [activeTab, auditPage, auditSortBy, auditSortOrder, auditSearch, attendanceFilter, leaveFilter, workHoursPage, workHoursLimit, workHoursSearch, workHoursDateRange]);
 
   const fetchCalendarSummary = async () => {
     try {
@@ -1152,7 +1218,7 @@ function AdminDashboard() {
     setFormData({
       employee_id: employee.employee_id || '',
       first_name: employee.first_name || '',
-      middle_name: employee.middle_name || '',
+      middle_name: (employee.middle_name && employee.middle_name !== employee.email) ? employee.middle_name : '',
       last_name: employee.last_name || '',
       email: employee.email,
       role: employee.role || 'employee',
@@ -1243,12 +1309,13 @@ function AdminDashboard() {
             <h3 className="text-lg font-medium mb-4">
               {selectedEmployee ? 'Edit Employee' : 'Add New Employee'}
             </h3>
-            <form onSubmit={handleAddOrUpdateEmployee}>
+            <form onSubmit={handleAddOrUpdateEmployee} autoComplete="off">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee ID</label>
                   <input
                     type="text"
+                    name="employee_id"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
                     value={formData.employee_id}
                     readOnly
@@ -1260,6 +1327,7 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">Last Name</label>
                   <input
                     type="text"
+                    name="last_name"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.last_name}
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
@@ -1271,6 +1339,7 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">First Name</label>
                   <input
                     type="text"
+                    name="first_name"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.first_name}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
@@ -1282,6 +1351,8 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">Middle Name <span className="text-gray-400 text-xs">(Optional)</span></label>
                   <input
                     type="text"
+                    name="middle_name"
+                    autoComplete="off"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.middle_name}
                     onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })}
@@ -1293,7 +1364,9 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">Email</label>
                   <input
                     type="email"
+                    name="email"
                     required={!selectedEmployee}
+                    autoComplete="off"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -1304,6 +1377,8 @@ function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700">Password</label>
                   <input
                     type="password"
+                    name="password"
+                    autoComplete="new-password"
                     required={!selectedEmployee}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.password}
@@ -2277,6 +2352,15 @@ function AdminDashboard() {
             Audit Logs
           </button>
           <button
+            onClick={() => setActiveTab(TABS.WORK_HOURS)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.WORK_HOURS
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
+              }`}
+          >
+            Work Hours
+          </button>
+          <button
             onClick={() => setActiveTab(TABS.REPORTS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.REPORTS
               ? 'bg-[#3f4a59] text-white'
@@ -2333,6 +2417,102 @@ function AdminDashboard() {
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
           {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
+          {activeTab === TABS.WORK_HOURS && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Work Hours & Attendance</h2>
+              <div className="bg-white shadow rounded-lg p-6">
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="md:col-span-2">
+                    <input
+                      type="text"
+                      placeholder="Search by employee name or email..."
+                      className="w-full border rounded-md px-3 py-2"
+                      value={workHoursSearch}
+                      onChange={(e) => setWorkHoursSearch(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="date"
+                      className="w-full border rounded-md px-3 py-2"
+                      value={workHoursDateRange.start}
+                      onChange={(e) => setWorkHoursDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="date"
+                      className="w-full border rounded-md px-3 py-2"
+                      value={workHoursDateRange.end}
+                      onChange={(e) => setWorkHoursDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex items-end self-end">
+                    <button
+                      onClick={downloadWorkHoursReport}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      Download Excel
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Times</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {workHoursLogs.length === 0 ? (
+                        <tr><td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">No records found.</td></tr>
+                      ) : (
+                        workHoursLogs.map((log) => (
+                          <tr key={log.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(log.date)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <div className="font-medium">{log.employee_name}</div>
+                              <div className="text-xs text-gray-500">{log.employee_email}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <div>In: {log.check_in_time || '-'}</div>
+                              <div>Out: {log.check_out_time || '-'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{log.total_hours || '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                  ${log.status === 'present' ? 'bg-green-100 text-green-800' :
+                                  log.status === 'absent' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800'}`}>
+                                {log.status}
+                              </span>
+                              <div className="flex gap-1 mt-1">
+                                {log.is_late ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600 border border-red-200">Late</span> : null}
+                                {log.is_left_early ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200">Early</span> : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                <div className="mt-4 flex items-center justify-between">
+                  <button onClick={() => setWorkHoursPage(p => Math.max(1, p - 1))} disabled={workHoursPage === 1} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
+                  <span className="text-sm">Page {workHoursPage}</span>
+                  <button onClick={() => setWorkHoursPage(p => p + 1)} disabled={workHoursLogs.length < workHoursLimit} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === TABS.REPORTS && renderReports()}
           {activeTab === TABS.SETTINGS && renderSettings()}
         </main>

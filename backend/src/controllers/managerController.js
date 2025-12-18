@@ -235,20 +235,12 @@ export async function getTeamWorkHours(req, res) {
           ),
           0
         ) AS hours,
-        -- Overtime: hours > 8
-        GREATEST(
-          COALESCE(
-            TIMESTAMPDIFF(
-              HOUR,
-              CONCAT(a.attendance_date, ' ', a.check_in_time),
-              CONCAT(a.attendance_date, ' ', a.check_out_time)
-            ),
-            0
-          ) - 8,
-          0
-        ) AS overtime_hours
+
+        wh.is_late,
+        wh.is_left_early
       FROM attendance a
       JOIN employees e ON a.user_id = e.id
+      LEFT JOIN work_hours wh ON a.id = wh.attendance_id
       WHERE e.manager_id = ?
         AND a.check_in_time IS NOT NULL
         AND a.check_out_time IS NOT NULL

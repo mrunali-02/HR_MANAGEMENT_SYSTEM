@@ -319,7 +319,8 @@ async function migrate() {
         check_in_time TIME NOT NULL,
         check_out_time TIME NOT NULL,
         total_hours DECIMAL(5,2) NOT NULL DEFAULT 0,
-        overtime_hours DECIMAL(5,2) NOT NULL DEFAULT 0,
+        is_late BOOLEAN DEFAULT FALSE,
+        is_left_early BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
@@ -331,20 +332,25 @@ async function migrate() {
     `);
     console.log('✓ Created work_hours table');
 
-    // Create overtime table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS overtimes (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        work_date DATE NOT NULL,
-        hours DECIMAL(5,2) NOT NULL DEFAULT 0,
-        description TEXT,
-        status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    console.log('✓ Created overtimes table');
+    // Migration: Add Late/Left Early columns to work_hours
+    try {
+      const whCols = ['is_late', 'is_left_early'];
+      for (const col of whCols) {
+        await connection.execute(`
+            SELECT count(*) FROM information_schema.COLUMNS 
+            WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'work_hours' AND COLUMN_NAME = '${col}')
+          `).then(async ([rows]) => {
+          if (rows[0]['count(*)'] === 0) {
+            await connection.execute(`ALTER TABLE work_hours ADD COLUMN ${col} BOOLEAN DEFAULT FALSE`);
+            console.log(`✓ Added ${col} column to work_hours`);
+          }
+        });
+      }
+    } catch (err) {
+      console.log('Note: work_hours column migration check failed', err.message);
+    }
+
+
 
     // Create audit logs table
     await connection.execute(`

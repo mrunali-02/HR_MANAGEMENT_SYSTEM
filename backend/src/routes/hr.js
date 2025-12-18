@@ -19,7 +19,9 @@ import {
   getAllAttendanceRecords,
   getCalendarSummary,
   createApprovedLeave,
-  exportAuditLogs
+
+  exportAuditLogs,
+  exportWorkHoursExcel
 } from '../controllers/adminController.js';
 
 import { authToken } from '../middlewares/authToken.js';
@@ -52,5 +54,6 @@ router.get('/export/attendance', exportAttendance);
 router.get('/export/leaves', exportLeaves);
 router.get('/export/employees', exportEmployees);
 router.get('/export/audit-logs', exportAuditLogs);
+router.get('/export/work-hours-excel', exportWorkHoursExcel);
 
 export default router;

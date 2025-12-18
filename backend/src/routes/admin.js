@@ -13,6 +13,7 @@ import {
   getLeaveStatistics,
   approveLeaveRequest,
   rejectLeaveRequest,
+  getAllAttendanceRecords,
   getHrAnalytics,
   updateAdminProfile,
   changeAdminPassword,
@@ -35,10 +36,7 @@ import {
   getAttendanceCorrections,
   approveAttendanceCorrection,
   rejectAttendanceCorrection,
-  // Overtimes
-  getOvertimes,
-  approveOvertime,
-  rejectOvertime,
+
   // Audit Logs
   getAuditLogs,
   // Notes
@@ -51,6 +49,7 @@ import {
   getEmployeeRoleStats,
   exportAttendance,
   exportLeaves,
+  exportWorkHoursExcel,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -76,6 +75,9 @@ router.get('/leave-statistics', authToken, requireRole('admin'), getLeaveStatist
 router.put('/leave-requests/:id/approve', authToken, requireRole('admin'), approveLeaveRequest);
 router.put('/leave-requests/:id/reject', authToken, requireRole('admin'), rejectLeaveRequest);
 
+// Attendance Records (Work Hours)
+router.get('/attendance-records', authToken, requireRole('admin'), getAllAttendanceRecords);
+
 // Departments
 router.get('/departments', authToken, requireRole('admin'), getDepartments);
 router.post('/departments', authToken, requireRole('admin'), createDepartment);
@@ -99,16 +101,14 @@ router.get('/attendance-corrections', authToken, requireRole('admin'), getAttend
 router.put('/attendance-corrections/:id/approve', authToken, requireRole('admin'), approveAttendanceCorrection);
 router.put('/attendance-corrections/:id/reject', authToken, requireRole('admin'), rejectAttendanceCorrection);
 
-// Overtimes
-router.get('/overtimes', authToken, requireRole('admin'), getOvertimes);
-router.put('/overtimes/:id/approve', authToken, requireRole('admin'), approveOvertime);
-router.put('/overtimes/:id/reject', authToken, requireRole('admin'), rejectOvertime);
+
 
 // Reports & Export
 router.get('/reports/attendance', authToken, requireRole('admin'), getAttendanceReport);
 router.get('/reports/leaves', authToken, requireRole('admin'), getLeaveReport);
 router.get('/export/attendance', authToken, requireRole('admin'), exportAttendance);
 router.get('/export/leaves', authToken, requireRole('admin'), exportLeaves);
+router.get('/export/work-hours-excel', authToken, requireRole('admin'), exportWorkHoursExcel);
 
 // Analytics & Audit
 router.get('/analytics', authToken, requireRole('admin'), getHrAnalytics);

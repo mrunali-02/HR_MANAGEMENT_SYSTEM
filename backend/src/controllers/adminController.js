@@ -3,6 +3,7 @@ import db from '../db/db.js';
 import { comparePassword, hashPassword } from '../utils/hash.js';
 import { generateToken, getExpiryDate } from '../utils/token.js';
 import { logAudit, createNotification } from '../utils/audit.js';
+import ExcelJS from 'exceljs';
 
 const formatDate = (dateValue) => {
   if (!dateValue) return null;
@@ -22,7 +23,7 @@ export async function getDashboardSummary(req, res) {
         (SELECT COUNT(*) FROM employees WHERE status = 'active') AS activeEmployees,
         (SELECT COUNT(*) FROM leave_requests lr JOIN employees e ON lr.user_id = e.id WHERE lr.status = 'pending' AND (${req.user.role === 'admin' ? '1=1' : "e.role IN ('manager', 'employee')"})) AS pendingLeaveRequests,
         (SELECT COUNT(*) FROM attendance_corrections WHERE status = 'pending') AS pendingAttendanceCorrections,
-        (SELECT COUNT(*) FROM overtimes WHERE status = 'pending') AS pendingOvertimeRequests,
+
         (SELECT COUNT(*) FROM employees WHERE role='manager') AS totalManagers,
         (SELECT COUNT(*) FROM employees WHERE role='hr') AS totalHr,
         (SELECT COUNT(*) FROM employees WHERE role='admin') AS totalAdmins,
@@ -78,7 +79,7 @@ export async function getDashboardSummary(req, res) {
     const notifications = [];
     if (counts?.pendingLeaveRequests > 0) notifications.push(`${counts.pendingLeaveRequests} leave requests pending approval`);
     if (counts?.pendingAttendanceCorrections > 0) notifications.push(`${counts.pendingAttendanceCorrections} attendance corrections pending`);
-    if (counts?.pendingOvertimeRequests > 0) notifications.push(`${counts.pendingOvertimeRequests} overtime requests pending`);
+
 
     if (notifications.length === 0) {
       notifications.push('No actions pending');
@@ -90,7 +91,7 @@ export async function getDashboardSummary(req, res) {
         activeEmployees: counts?.activeEmployees || 0,
         pendingLeaveRequests: counts?.pendingLeaveRequests || 0,
         pendingAttendanceCorrections: counts?.pendingAttendanceCorrections || 0,
-        pendingOvertimeRequests: counts?.pendingOvertimeRequests || 0,
+
         presentToday: presentCount || 0,
         absentToday,
         totalManagers: counts?.totalManagers || 0,
@@ -1057,83 +1058,7 @@ export async function rejectAttendanceCorrection(req, res) {
   }
 }
 
-/* ======================
-     OVERTIMES MANAGEMENT
-====================== */
-export async function getOvertimes(req, res) {
-  try {
-    const [overtimes] = await db.execute(`
-    SELECT
-    o.id, o.user_id, o.work_date, o.hours, o.description,
-      o.status, o.created_at,
-      REPLACE(e.name, ',', '') AS employee_name, e.email AS employee_email
-      FROM overtimes o
-      JOIN employees e ON o.user_id = e.id
-      ORDER BY o.created_at DESC
-    `);
-    res.json({ overtimes });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch overtimes' });
-  }
-}
 
-export async function approveOvertime(req, res) {
-  try {
-    const { id } = req.params;
-    await db.execute(
-      'UPDATE overtimes SET status = ? WHERE id = ?',
-      ['approved', id]
-    );
-
-    // Get overtime details for notification
-    const [overtime] = await db.execute(
-      'SELECT user_id, hours, work_date FROM overtimes WHERE id = ?',
-      [id]
-    );
-
-    if (overtime.length > 0) {
-      await createNotification(
-        overtime[0].user_id,
-        `Your overtime request for ${overtime[0].work_date}(${overtime[0].hours} hours) has been approved`
-      );
-    }
-
-    await logAudit(req.user.id, 'overtime_approved', { overtime_id: id });
-    res.json({ message: 'Overtime approved' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to approve overtime' });
-  }
-}
-
-export async function rejectOvertime(req, res) {
-  try {
-    const { id } = req.params;
-
-    // Get user_id for notification
-    const [overtime] = await db.execute(
-      'SELECT user_id, work_date, hours FROM overtimes WHERE id = ?',
-      [id]
-    );
-
-    await db.execute(
-      'UPDATE overtimes SET status = ? WHERE id = ?',
-      ['rejected', id]
-    );
-
-    if (overtime.length > 0) {
-      await createNotification(
-        overtime[0].user_id,
-        `Your overtime request for ${overtime[0].work_date} (${overtime[0].hours} hours) has been rejected.`
-      );
-    }
-
-    await logAudit(req.user.id, 'overtime_rejected', { overtime_id: id });
-    res.json({ message: 'Overtime rejected' });
-  } catch (error) {
-    console.error('Reject overtime error:', error);
-    res.status(500).json({ error: 'Failed to reject overtime' });
-  }
-}
 
 /* ======================
      AUDIT LOGS
@@ -1398,6 +1323,101 @@ export async function exportEmployees(req, res) {
   }
 }
 
+export async function exportWorkHoursExcel(req, res) {
+  try {
+    const search = req.query.search || '';
+    const { startDate, endDate } = req.query;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (search) {
+      whereClause += ` AND (e.name LIKE ? OR e.email LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (startDate) {
+      whereClause += ` AND a.attendance_date >= ?`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      whereClause += ` AND a.attendance_date <= ?`;
+      params.push(endDate);
+    }
+
+    const query = `
+      SELECT 
+        DATE_FORMAT(a.attendance_date, '%Y-%m-%d') as date,
+        e.name as employee_name, 
+        e.email as employee_email, 
+        e.department,
+        a.check_in_time, 
+        a.check_out_time, 
+        COALESCE(wh.total_hours, 0) as total_hours,
+        wh.is_late,
+        wh.is_left_early,
+        a.status
+      FROM attendance a
+      JOIN employees e ON a.user_id = e.id
+      LEFT JOIN work_hours wh ON a.id = wh.attendance_id
+      ${whereClause}
+      ORDER BY a.attendance_date DESC, e.name ASC
+    `;
+
+    const [rows] = await db.execute(query, params);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Work Hours');
+
+    worksheet.columns = [
+      { header: 'Date', key: 'date', width: 15 },
+      { header: 'Employee Name', key: 'employee_name', width: 25 },
+      { header: 'Email', key: 'employee_email', width: 30 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Check In', key: 'check_in_time', width: 12 },
+      { header: 'Check Out', key: 'check_out_time', width: 12 },
+      { header: 'Total Hours', key: 'total_hours', width: 12 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Is Late', key: 'is_late', width: 10 },
+      { header: 'Left Early', key: 'is_left_early', width: 10 }
+    ];
+
+    // Style header
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    rows.forEach(row => {
+      worksheet.addRow({
+        date: row.date,
+        employee_name: row.employee_name,
+        employee_email: row.employee_email,
+        department: row.department,
+        check_in_time: row.check_in_time,
+        check_out_time: row.check_out_time,
+        total_hours: row.total_hours,
+        status: row.status,
+        is_late: row.is_late ? 'Yes' : 'No',
+        is_left_early: row.is_left_early ? 'Yes' : 'No'
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=Work_Hours_Report.xlsx');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Export work hours excel error:', error);
+    res.status(500).json({ error: 'Failed to export work hours excel' });
+  }
+}
+
 export async function getWorkHoursStats(req, res) {
   try {
     const { startDate, endDate } = req.query;
@@ -1498,18 +1518,28 @@ export async function getAllAttendanceRecords(req, res) {
         a.id, a.user_id, e.name as employee_name, e.email as employee_email, e.department,
         a.attendance_date as date, a.status, 
         a.check_in_time, a.check_out_time, 
-        TIME_FORMAT(
-          SEC_TO_TIME(
-            TIMESTAMPDIFF(
-              SECOND,
-              CONCAT(a.attendance_date, ' ', a.check_in_time),
-              CONCAT(a.attendance_date, ' ', a.check_out_time)
-            )
+        COALESCE(
+          IF(a.check_out_time IS NOT NULL,
+            TIME_FORMAT(
+              SEC_TO_TIME(
+                TIMESTAMPDIFF(
+                  SECOND,
+                  CONCAT(a.attendance_date, ' ', a.check_in_time),
+                  CONCAT(a.attendance_date, ' ', a.check_out_time)
+                )
+              ),
+              '%H:%i'
+            ),
+            NULL
           ),
-          '%H:%i'
-        ) as total_hours
+          TIME_FORMAT(SEC_TO_TIME(wh.total_hours * 3600), '%H:%i'),
+          '00:00'
+        ) as total_hours,
+        wh.is_late,
+        wh.is_left_early
       FROM attendance a
       JOIN employees e ON a.user_id = e.id
+      LEFT JOIN work_hours wh ON a.id = wh.attendance_id
       ${whereClause}
       ORDER BY a.attendance_date DESC, a.check_in_time DESC
       LIMIT ${limit} OFFSET ${offset}

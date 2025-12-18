@@ -11,8 +11,7 @@ import {
   cancelLeave,
   getNotifications,
   updateEmployeeProfile,
-  getOvertimes,
-  createOvertime,
+
   getAttendanceCorrections,
   createAttendanceCorrection,
   changePassword
@@ -33,9 +32,7 @@ router.get('/employee/:id/leaves', authToken, getLeaveHistory);
 router.post('/employee/:id/leaves', authToken, uploadLeaveDoc.single('document'), createLeaveRequest);
 router.put('/employee/:id/leaves/:leaveId/cancel', authToken, cancelLeave);
 
-// Overtimes
-router.get('/employee/:id/overtimes', authToken, getOvertimes);
-router.post('/employee/:id/overtimes', authToken, createOvertime);
+
 
 // Attendance Corrections
 router.get('/employee/:id/attendance-corrections', authToken, getAttendanceCorrections);

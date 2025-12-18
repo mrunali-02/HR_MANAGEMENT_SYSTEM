@@ -420,30 +420,7 @@ function EmployeeDashboard() {
   };
 
   const handleLeaveFormChange = (field, value) => {
-    if (field === 'startDate' || field === 'endDate') {
-      const dateObj = new Date(value);
-      const day = dateObj.getDay();
-      if (day === 0 || day === 6) {
-        alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
-        return;
-      }
-
-      const isHoliday = holidays.some(h => {
-        let hDate = h.date;
-        if (typeof h.date === 'string') {
-          const d = new Date(h.date);
-          const year = d.getFullYear();
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          hDate = `${year}-${month}-${day}`;
-        }
-        return hDate === value;
-      });
-      if (isHoliday) {
-        alert('Selected date is a holiday marked by HR/Admin.');
-        return;
-      }
-    }
+    // [MODIFIED] Removed blocking alert for weekends to allow calendar navigation
     setLeaveForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -463,6 +440,33 @@ function EmployeeDashboard() {
       setError('End date cannot be before start date.');
       return;
     }
+
+    // [NEW] Validate weekends and holidays on submission
+    const validateDate = (dateStr) => {
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      if (day === 0 || day === 6) return 'Weekends (Saturday/Sunday) cannot be selected for leave.';
+
+      const isHoliday = holidays.some(h => {
+        let hDate = h.date;
+        if (typeof h.date === 'string') {
+          const hd = new Date(h.date);
+          const year = hd.getFullYear();
+          const month = String(hd.getMonth() + 1).padStart(2, '0');
+          const day = String(hd.getDate()).padStart(2, '0');
+          hDate = `${year}-${month}-${day}`;
+        }
+        return hDate === dateStr;
+      });
+      if (isHoliday) return 'Selected date is a holiday marked by HR/Admin.';
+      return null;
+    };
+
+    const startError = validateDate(leaveForm.startDate);
+    if (startError) { setError(`Start Date: ${startError}`); return; }
+
+    const endError = validateDate(leaveForm.endDate);
+    if (endError) { setError(`End Date: ${endError}`); return; }
 
     setLeaveSubmitting(true);
     try {
@@ -745,12 +749,17 @@ function EmployeeDashboard() {
                 <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover flex flex-col justify-between h-full">
                   <div>
                     <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Today's Status</div>
-                    <div className="mt-2 text-2xl font-bold text-primary">
+                    <div className="mt-2 text-2xl font-bold text-primary flex items-center gap-2">
                       {todayAttendance?.status === 'present'
                         ? 'Present'
                         : todayAttendance?.status === 'absent'
                           ? 'Absent'
                           : 'Not Marked'}
+                      {todayAttendance?.check_in && todayAttendance.check_in > '10:00' && (
+                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200">
+                          Late
+                        </span>
+                      )}
                     </div>
                     {todayAttendance?.check_in && (
                       <div className="mt-1 text-xs text-secondary opacity-75">
@@ -765,9 +774,7 @@ function EmployeeDashboard() {
                     {todayAttendance?.total_hours && (
                       <div className="mt-1 text-xs text-secondary opacity-75 font-semibold">
                         Hours: {todayAttendance.total_hours}
-                        {todayAttendance.overtime_hours && parseFloat(todayAttendance.overtime_hours) > 0 && (
-                          <span className="ml-1">(+{todayAttendance.overtime_hours} OT)</span>
-                        )}
+
                       </div>
                     )}
                   </div>
@@ -846,26 +853,7 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* 4. Overtime Hours Card */}
-                <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm h-full flex flex-col justify-between card-hover">
-                  <div>
-                    <div className="flex items-center justify-between pb-4">
-                      <h3 className="text-sm font-medium text-secondary">Overtime Hours</h3>
-                      <div className="p-2 bg-[color:var(--bg-main)] rounded-full">
-                        <svg className="w-5 h-5 text-[color:var(--status-pending)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-primary">
-                      {attendanceRecords.reduce((acc, curr) => acc + (parseFloat(curr.overtime_hours) || 0), 0).toFixed(1)}
-                    </div>
-                    <p className="text-xs text-secondary mt-1">Total Overtime (30 Days)</p>
-                  </div>
-                  <div className="mt-4 text-xs text-secondary opacity-60">
-                    Accumulated overtime.
-                  </div>
-                </div>
+
               </div>
 
               {/* Recent Notifications List - Full Width Below Grid */}
@@ -964,20 +952,34 @@ function EmployeeDashboard() {
                             </span>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {rec.check_in || '--'}
+                            {rec.check_in ? (
+                              <div className="flex items-center gap-1">
+                                {rec.check_in}
+                                {rec.is_late && (
+                                  <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200" title="Late Arrival">
+                                    L
+                                  </span>
+                                )}
+                              </div>
+                            ) : '--'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {rec.check_out || '--'}
+                            {rec.check_out ? (
+                              <div className="flex items-center gap-1">
+                                {rec.check_out}
+                                {rec.is_left_early && (
+                                  <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded border border-orange-200" title="Left Early">
+                                    LE
+                                  </span>
+                                )}
+                              </div>
+                            ) : '--'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                             {rec.total_hours ? (
                               <span>
                                 {rec.total_hours} hrs
-                                {rec.overtime_hours && parseFloat(rec.overtime_hours) > 0 && (
-                                  <span className="text-emerald-600 ml-1">
-                                    (+{rec.overtime_hours} OT)
-                                  </span>
-                                )}
+
                               </span>
                             ) : (
                               '--'
@@ -1000,6 +1002,7 @@ function EmployeeDashboard() {
                 <CalendarView
                   attendance={attendanceRecords}
                   holidays={holidays}
+                  leaves={leaveHistory}
                   role="employee"
                 />
               </div>
