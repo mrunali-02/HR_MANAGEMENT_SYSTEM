@@ -28,15 +28,15 @@ import CalendarView from '../components/CalendarView';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 const TABS = {
-  DASHBOARD: 'dashboard',
-  EMPLOYEES: 'employees',
-  LEAVE_APPLICATIONS: 'leaveApplications',
-  APPLY_LEAVE: 'applyLeave',
-  CALENDAR: 'calendar',
-  ANALYTICS: 'analytics',
-  AUDIT_LOGS: 'auditLogs',
-  WORK_HOURS: 'workHours',
-  SETTINGS: 'settings',
+  DASHBOARD: 'Dashboard',
+  EMPLOYEES: 'Employees',
+  LEAVE_APPLICATIONS: 'Leave Applications',
+  APPLY_LEAVE: 'Apply Leave',
+  CALENDAR: 'Calendar',
+  ANALYTICS: 'Analytics',
+  AUDIT_LOGS: 'Audit Logs',
+  WORK_HOURS: 'Work Hours',
+  SETTINGS: 'Settings',
 };
 
 function HrDashboard() {
@@ -843,10 +843,10 @@ function HrDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         {/* New Attendance Card */}
-        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between h-full">
+        <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover flex flex-col justify-between h-full">
           <div>
-            <div className="text-sm uppercase tracking-wide opacity-80">Today's Status</div>
-            <div className="mt-2 text-2xl font-bold">
+            <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Today's Status</div>
+            <div className="mt-2 text-2xl font-bold text-primary">
               {todayAttendance?.status === 'present'
                 ? 'Present'
                 : todayAttendance?.status === 'absent'
@@ -854,17 +854,17 @@ function HrDashboard() {
                   : 'Not Marked'}
             </div>
             {todayAttendance?.check_in && (
-              <div className="mt-1 text-xs opacity-75">
+              <div className="mt-1 text-xs text-secondary">
                 In: {todayAttendance.check_in}
               </div>
             )}
             {todayAttendance?.check_out && (
-              <div className="mt-1 text-xs opacity-75">
+              <div className="mt-1 text-xs text-secondary">
                 Out: {todayAttendance.check_out}
               </div>
             )}
             {todayAttendance?.total_hours && (
-              <div className="mt-1 text-xs opacity-75 font-semibold">
+              <div className="mt-1 text-xs text-secondary font-semibold">
                 Hours: {todayAttendance.total_hours}
               </div>
             )}
@@ -874,8 +874,8 @@ function HrDashboard() {
               onClick={handleMarkAttendance}
               disabled={attendanceMarked || todayAttendance?.status === 'present'}
               className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${attendanceMarked || todayAttendance?.status === 'present'
-                ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
-                : 'bg-white text-indigo-600 hover:bg-indigo-50 shadow-md'
+                ? 'bg-[color:var(--status-success)] text-white cursor-not-allowed opacity-90'
+                : 'bg-[color:var(--accent-primary)] text-white hover:opacity-90 shadow-md'
                 }`}
             >
               {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
@@ -885,8 +885,8 @@ function HrDashboard() {
               onClick={handleCheckout}
               disabled={!attendanceMarked || checkoutMarked}
               className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${!attendanceMarked || checkoutMarked
-                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                ? 'bg-[color:var(--bg-main)] text-secondary cursor-not-allowed'
+                : 'bg-[color:var(--status-success)] text-white hover:opacity-90 shadow-md'
                 }`}
             >
               {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
@@ -895,52 +895,47 @@ function HrDashboard() {
         </div>
 
         {/* Existing Stat Cards & New Widgets */}
-        <div className="bg-white p-6 rounded-lg shadow border border-indigo-100 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-indigo-200"></div>
-          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Total Employees</div>
-          <div className="text-4xl font-extrabold text-indigo-600 mt-2 relative z-10">{dashboardSummary?.totals?.totalEmployees || totalEmployees}</div>
+        <div className="bg-white border-l-4 border-[color:var(--accent-primary)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-semibold text-secondary uppercase tracking-wider">Total Employees</div>
+          <div className="text-4xl font-extrabold text-primary mt-2">{dashboardSummary?.totals?.totalEmployees || totalEmployees}</div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow border border-green-100 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-green-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-green-200"></div>
-          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Present Today</div>
-          <div className="text-4xl font-extrabold text-green-600 mt-2 relative z-10">{dashboardSummary?.totals?.presentToday || 0}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-success)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-semibold text-secondary uppercase tracking-wider">Present Today</div>
+          <div className="text-4xl font-extrabold text-primary mt-2">{dashboardSummary?.totals?.presentToday || 0}</div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow border border-red-100 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-red-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-red-200"></div>
-          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10">Absent Today</div>
-          <div className="text-4xl font-extrabold text-red-600 mt-2 relative z-10">{dashboardSummary?.totals?.absentToday || 0}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-inactive)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-semibold text-secondary uppercase tracking-wider">Absent Today</div>
+          <div className="text-4xl font-extrabold text-primary mt-2">{dashboardSummary?.totals?.absentToday || 0}</div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow border border-yellow-100 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-100 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-yellow-200"></div>
-          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider relative z-10 mb-2">Your Leave Balance</div>
-
-          <div className="grid grid-cols-3 gap-2 relative z-10">
+        <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-semibold text-secondary uppercase tracking-wider mb-2">Your Leave Balance</div>
+          <div className="grid grid-cols-3 gap-2">
             <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.sick ?? '-'}</div>
-              <div className="text-xs text-gray-500">Sick</div>
+              <div className="text-2xl font-bold text-primary">{myLeaveBalance?.sick ?? '-'}</div>
+              <div className="text-xs text-secondary">Sick</div>
             </div>
             <div className="text-center border-l border-gray-200">
-              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.casual ?? '-'}</div>
-              <div className="text-xs text-gray-500">Casual</div>
+              <div className="text-2xl font-bold text-primary">{myLeaveBalance?.casual ?? '-'}</div>
+              <div className="text-xs text-secondary">Casual</div>
             </div>
             <div className="text-center border-l border-gray-200">
-              <div className="text-2xl font-bold text-yellow-600">{myLeaveBalance?.paid ?? '-'}</div>
-              <div className="text-xs text-gray-500">Planned</div>
+              <div className="text-2xl font-bold text-primary">{myLeaveBalance?.paid ?? '-'}</div>
+              <div className="text-xs text-secondary">Planned</div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow border border-purple-100 relative overflow-hidden">
-          <div className="text-sm font-medium opacity-90 uppercase tracking-wider">Pending Leaves</div>
-          <div className="text-4xl font-extrabold mt-2">{dashboardSummary?.totals?.pendingLeaveRequests || 0}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-medium opacity-90 uppercase tracking-wider text-secondary">Pending Leaves</div>
+          <div className="text-4xl font-extrabold mt-2 text-primary">{dashboardSummary?.totals?.pendingLeaveRequests || 0}</div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow border border-orange-100 relative overflow-hidden">
-          <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Pending Corrections</div>
-          <div className="text-3xl font-bold text-orange-600 mt-2">{dashboardSummary?.totals?.pendingAttendanceCorrections || 0}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-inactive)] p-6 rounded-xl shadow-sm card-hover">
+          <div className="text-sm font-semibold text-secondary uppercase tracking-wider">Pending Corrections</div>
+          <div className="text-3xl font-bold text-primary mt-2">{dashboardSummary?.totals?.pendingAttendanceCorrections || 0}</div>
         </div>
 
       </div>
@@ -1169,19 +1164,19 @@ function HrDashboard() {
   };
 
   const CARD_COLORS = {
-    indigo: 'bg-indigo-600',
-    emerald: 'bg-emerald-600',
-    blue: 'bg-blue-600',
-    amber: 'bg-amber-500',
-    yellow: 'bg-yellow-500',
-    green: 'bg-green-600',
-    red: 'bg-red-600',
+    indigo: 'border-l-4 border-[color:var(--accent-primary)]',
+    emerald: 'border-l-4 border-[color:var(--status-success)]',
+    blue: 'border-l-4 border-[color:var(--accent-primary)]',
+    amber: 'border-l-4 border-[color:var(--status-pending)]',
+    yellow: 'border-l-4 border-[color:var(--status-pending)]',
+    green: 'border-l-4 border-[color:var(--status-success)]',
+    red: 'border-l-4 border-[color:var(--status-inactive)]',
   };
 
   const Card = ({ label, value, color }) => (
-    <div className={`${CARD_COLORS[color]} text-white p-6 rounded-xl shadow`}>
-      <p className="text-sm opacity-80">{label}</p>
-      <p className="text-3xl font-bold">{value ?? 0}</p>
+    <div className={`bg-white ${CARD_COLORS[color]} p-6 rounded-xl shadow-sm card-hover`}>
+      <p className="text-sm font-semibold uppercase tracking-wide text-secondary">{label}</p>
+      <p className="text-3xl font-bold text-primary mt-2">{value ?? 0}</p>
     </div>
   );
 
@@ -1193,7 +1188,7 @@ function HrDashboard() {
       { name: 'Pending', value: analytics?.summary?.pendingLeaves || 0 },
       { name: 'Rejected', value: analytics?.summary?.rejectedLeaves || 0 },
     ];
-    const PIE_COLORS = ['#22c55e', '#eab308', '#ef4444'];
+    const PIE_COLORS = ['#8fa59b', '#3f4a59', '#2e2e2e'];
 
     if (!analytics) return <div className="text-gray-600">Loading analytics...</div>;
 
@@ -1260,31 +1255,31 @@ function HrDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Avg Work Hours by Department (30 Days)</h3>
+            <h3 className="text-lg font-semibold mb-2 text-primary">Avg Work Hours by Department (30 Days)</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={workHoursStats?.departmentHours || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="department" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="avg_hours" name="Avg Hours" fill="#8884d8" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="department" tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                  <Bar dataKey="avg_hours" name="Avg Hours" fill="#4a6fa5" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Daily Work Hours Trend (7 Days)</h3>
+            <h3 className="text-lg font-semibold mb-2 text-primary">Daily Work Hours Trend (7 Days)</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={workHoursStats?.dailyTrend || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                   <Legend />
-                  <Line type="monotone" dataKey="avg_hours" name="Avg Hours" stroke="#82ca9d" strokeWidth={2} />
+                  <Line type="monotone" dataKey="avg_hours" name="Avg Hours" stroke="#8fa59b" strokeWidth={3} dot={{ fill: '#8fa59b' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1293,29 +1288,29 @@ function HrDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Staffing: Employees by Department</h3>
+            <h3 className="text-lg font-semibold mb-2 text-primary">Staffing: Employees by Department</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={deptData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="department" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Employees" fill="#3b82f6" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="department" tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                  <Bar dataKey="count" name="Employees" fill="#3f4a59" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Leave Distribution (Status)</h3>
+            <h3 className="text-lg font-semibold mb-2 text-primary">Leave Distribution (Status)</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={leaveStatusData} dataKey="value" nameKey="name" outerRadius={80} label>
                     {leaveStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -1417,9 +1412,9 @@ function HrDashboard() {
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <h2 className="text-2xl font-bold text-gray-800">My Attendance & Holidays</h2>
         <div className="flex gap-2">
-          {!attendanceMarked ? <button onClick={handleMarkAttendance} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold">Check In</button> : <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>}
-          {attendanceMarked && !checkoutMarked && <button onClick={handleCheckout} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold">Check Out</button>}
-          {checkoutMarked && <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>}
+          {!attendanceMarked ? <button onClick={handleMarkAttendance} className="bg-[color:var(--accent-primary)] text-white px-4 py-2 rounded-lg hover:opacity-90 font-bold">Check In</button> : <span className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg font-bold">✓ Checked In</span>}
+          {attendanceMarked && !checkoutMarked && <button onClick={handleCheckout} className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg hover:opacity-90 font-bold">Check Out</button>}
+          {checkoutMarked && <span className="bg-[color:var(--bg-main)] text-secondary px-4 py-2 rounded-lg font-bold border border-gray-200">✓ Checked Out</span>}
         </div>
       </div>
 
@@ -1440,7 +1435,7 @@ function HrDashboard() {
   const renderSettings = () => (
     <div className="max-w-6xl mx-auto pb-10 space-y-8">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-indigo-600 rounded-lg shadow-lg">
+        <div className="p-3 bg-[color:var(--accent-primary)] rounded-lg shadow-lg">
           <Settings className="w-6 h-6 text-white" />
         </div>
         <div>
@@ -1453,20 +1448,20 @@ function HrDashboard() {
         {/* Left Column: Personal Profile Card */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative group">
-            <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+            <div className="h-32 bg-[color:var(--accent-primary)]"></div>
             <div className="px-6 pb-6 text-center -mt-12 relative">
               <div className="w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-lg">
-                <div className="w-full h-full bg-gray-100 rounded-full flex items-center justify-center text-3xl font-bold text-indigo-600">
+                <div className="w-full h-full bg-[color:var(--bg-main)] rounded-full flex items-center justify-center text-3xl font-bold text-primary">
                   {settingsForm.name ? settingsForm.name.charAt(0) : 'U'}
                 </div>
               </div>
-              <h3 className="mt-4 text-xl font-bold text-gray-900">{settingsForm.name || 'User Name'}</h3>
-              <p className="text-indigo-600 font-medium">{settingsForm.role || 'Role'}</p>
+              <h3 className="mt-4 text-xl font-bold text-primary">{settingsForm.name || 'User Name'}</h3>
+              <p className="text-secondary font-medium">{settingsForm.role || 'Role'}</p>
               <div className="mt-4 flex justify-center gap-2">
-                <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full border border-green-100">
+                <span className="px-3 py-1 bg-[color:var(--status-success)] text-white text-xs font-semibold rounded-full">
                   {settingsForm.status || 'Active'}
                 </span>
-                <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
+                <span className="px-3 py-1 bg-[color:var(--accent-primary)] text-white text-xs font-semibold rounded-full">
                   {settingsForm.department || 'Dept'}
                 </span>
               </div>
@@ -1512,7 +1507,7 @@ function HrDashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <Phone className="w-5 h-5 text-indigo-500" />
+                <Phone className="w-5 h-5 text-[color:var(--accent-primary)]" />
                 Contact & Details
               </h3>
             </div>
@@ -1565,7 +1560,7 @@ function HrDashboard() {
                 <button
                   type="submit"
                   disabled={settingsSaving}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-medium text-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 bg-[color:var(--accent-primary)] hover:opacity-90 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-medium text-sm disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {settingsSaving ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : <Save className="w-4 h-4" />}
                   {settingsSaving ? 'Saving...' : 'Save Changes'}
@@ -1578,7 +1573,7 @@ function HrDashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-indigo-500" />
+                <Shield className="w-5 h-5 text-[color:var(--accent-primary)]" />
                 Security & Password
               </h3>
             </div>
@@ -1958,26 +1953,26 @@ function HrDashboard() {
   return (
     <div className="min-h-screen flex bg-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="h-16 flex items-center justify-center border-b border-gray-700 text-lg font-semibold">HRMS HR Panel</div>
+      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
+        <div className="h-16 flex items-center justify-center border-b border-[#3f4a59] text-lg font-semibold">HRMS HR Panel</div>
         <nav className="flex-1 p-4 space-y-1">
           {Object.values(TABS).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`w-full text-left px-4 py-2 rounded ${activeTab === tab ? 'bg-slate-800' : 'hover:bg-slate-700'}`}>
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`w-full text-left px-4 py-2 rounded ${activeTab === tab ? 'bg-[#3f4a59] text-white' : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'}`}>
               {tab.replace(/([A-Z])/g, ' $1').trim()}
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-700">
-          <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 w-full py-2 rounded text-sm text-white">Logout</button>
+        <div className="p-4 border-t border-[#3f4a59]">
+          <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 w-full py-2 rounded text-sm text-white transition">Logout</button>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col">
         {/* Top Header */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
           <div>
-            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-gray-900 capitalize">
+            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-secondary capitalize">
               {activeTab.replace(/([A-Z])/g, ' $1').trim()}
             </h2>
             <p className="text-xs text-gray-500">

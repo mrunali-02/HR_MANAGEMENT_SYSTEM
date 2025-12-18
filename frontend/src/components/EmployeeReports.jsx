@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { formatDate } from '../utils/dateUtils';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const COLORS = ['#4a6fa5', '#8fa59b', '#3f4a59', '#2e2e2e'];
 
 const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }) => {
     const [activeTab, setActiveTab] = useState('attendance');
@@ -195,30 +195,30 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                 {/* Filters */}
                 <div className="flex flex-wrap gap-2 items-end">
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                        <label className="block text-xs font-medium text-secondary mb-1">Start Date</label>
                         <input
                             type="date"
-                            className="border rounded px-2 py-1 text-sm"
+                            className="border rounded px-2 py-1 text-sm bg-white text-primary"
                             value={startDate}
                             onChange={e => setStartDate(e.target.value)}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                        <label className="block text-xs font-medium text-secondary mb-1">End Date</label>
                         <input
                             type="date"
-                            className="border rounded px-2 py-1 text-sm"
+                            className="border rounded px-2 py-1 text-sm bg-white text-primary"
                             value={endDate}
                             onChange={e => setEndDate(e.target.value)}
                         />
                     </div>
                     {isAdmin && (
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
+                            <label className="block text-xs font-medium text-secondary mb-1">Department</label>
                             <input
                                 type="text"
                                 placeholder="Filter Dept"
-                                className="border rounded px-2 py-1 text-sm w-32"
+                                className="border rounded px-2 py-1 text-sm w-32 bg-white text-primary"
                                 value={department}
                                 onChange={e => setDepartment(e.target.value)}
                             />
@@ -227,22 +227,22 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-gray-200">
+                <div className="flex border-b border-[#e2e8f0]">
                     <button
-                        className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'attendance' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'attendance' ? 'border-b-2 border-[color:var(--accent-primary)] text-accent' : 'text-secondary hover:text-primary'}`}
                         onClick={() => setActiveTab('attendance')}
                     >
                         Attendance
                     </button>
                     <button
-                        className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'leaves' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'leaves' ? 'border-b-2 border-[color:var(--accent-primary)] text-accent' : 'text-secondary hover:text-primary'}`}
                         onClick={() => setActiveTab('leaves')}
                     >
                         Leaves
                     </button>
                     {isAdmin && (
                         <button
-                            className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'roles' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`py-2 px-4 font-medium text-sm focus:outline-none ${activeTab === 'roles' ? 'border-b-2 border-[color:var(--accent-primary)] text-accent' : 'text-secondary hover:text-primary'}`}
                             onClick={() => setActiveTab('roles')}
                         >
                             Employees by Role
@@ -255,19 +255,19 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {activeTab === 'attendance' && (
                 <div className="space-y-8">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-gray-900">Attendance Overview</h3>
-                        <div className="text-sm text-gray-500">Showing {filteredAttendance.length} records</div>
+                        <h3 className="text-lg font-medium text-primary">Attendance Overview</h3>
+                        <div className="text-sm text-secondary">Showing {filteredAttendance.length} records</div>
                         <button
                             onClick={downloadAttendanceExcel}
-                            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition text-sm"
+                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
                         >
                             Export Excel
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gray-50 p-4 rounded shadow-sm">
-                            <h4 className="text-sm font-semibold text-gray-600 mb-4 text-center">Status Distribution</h4>
+                        <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm">
+                            <h4 className="text-sm font-semibold text-secondary mb-4 text-center">Status Distribution</h4>
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -276,7 +276,7 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                             cx="50%"
                                             cy="50%"
                                             outerRadius={80}
-                                            fill="#8884d8"
+                                            fill="#4a6fa5"
                                             dataKey="value"
                                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                         >
@@ -284,23 +284,23 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                             ))}
                                         </Pie>
-                                        <RechartsTooltip />
+                                        <RechartsTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                                         <Legend />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
-                        <div className="bg-gray-50 p-4 rounded shadow-sm">
-                            <h4 className="text-sm font-semibold text-gray-600 mb-4 text-center">Daily Work Hours (Recent)</h4>
+                        <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm">
+                            <h4 className="text-sm font-semibold text-secondary mb-4 text-center">Daily Work Hours (Recent)</h4>
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={attendanceStats.barData}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                                        <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
-                                        <RechartsTooltip />
-                                        <Bar dataKey="hours" fill="#8884d8" name="Hours" />
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                                        <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fill: '#3f4a59' }} tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                                        <RechartsTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                        <Bar dataKey="hours" fill="#4a6fa5" name="Hours" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -313,19 +313,19 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {activeTab === 'leaves' && (
                 <div className="space-y-8">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-gray-900">Leave Overview</h3>
-                        <div className="text-sm text-gray-500">Showing {filteredLeaves.length} records</div>
+                        <h3 className="text-lg font-medium text-primary">Leave Overview</h3>
+                        <div className="text-sm text-secondary">Showing {filteredLeaves.length} records</div>
                         <button
                             onClick={downloadLeaveExcel}
-                            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition text-sm"
+                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
                         >
                             Export Excel
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gray-50 p-4 rounded shadow-sm">
-                            <h4 className="text-sm font-semibold text-gray-600 mb-4 text-center">Leave Type Distribution</h4>
+                        <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm">
+                            <h4 className="text-sm font-semibold text-secondary mb-4 text-center">Leave Type Distribution</h4>
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -334,7 +334,7 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                             cx="50%"
                                             cy="50%"
                                             outerRadius={80}
-                                            fill="#82ca9d"
+                                            fill="#8fa59b"
                                             dataKey="value"
                                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                         >
@@ -342,23 +342,23 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                             ))}
                                         </Pie>
-                                        <RechartsTooltip />
+                                        <RechartsTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                                         <Legend />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
-                        <div className="bg-gray-50 p-4 rounded shadow-sm">
-                            <h4 className="text-sm font-semibold text-gray-600 mb-4 text-center">Monthly Trend</h4>
+                        <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm">
+                            <h4 className="text-sm font-semibold text-secondary mb-4 text-center">Monthly Trend</h4>
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={leaveStats.barData}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="month" />
-                                        <YAxis allowDecimals={false} label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
-                                        <RechartsTooltip />
-                                        <Bar dataKey="count" fill="#82ca9d" name="Leaves" />
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis dataKey="month" tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                                        <YAxis allowDecimals={false} label={{ value: 'Count', angle: -90, position: 'insideLeft', fill: '#3f4a59' }} tick={{ fill: '#3f4a59' }} axisLine={false} tickLine={false} />
+                                        <RechartsTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                        <Bar dataKey="count" fill="#8fa59b" name="Leaves" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -371,18 +371,18 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {activeTab === 'roles' && isAdmin && (
                 <div className="space-y-8">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-gray-900">Employees by Role</h3>
-                        <div className="text-sm text-gray-500">Total Employees: {employees.length}</div>
+                        <h3 className="text-lg font-medium text-primary">Employees by Role</h3>
+                        <div className="text-sm text-secondary">Total Employees: {employees.length}</div>
                         <button
                             onClick={downloadRoleExcel}
-                            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition text-sm"
+                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
                         >
                             Export Excel
                         </button>
                     </div>
 
-                    <div className="bg-gray-50 p-4 rounded shadow-sm max-w-2xl mx-auto">
-                        <h4 className="text-sm font-semibold text-gray-600 mb-4 text-center">Role Distribution</h4>
+                    <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm max-w-2xl mx-auto">
+                        <h4 className="text-sm font-semibold text-secondary mb-4 text-center">Role Distribution</h4>
                         <div className="h-80">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -391,7 +391,7 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                         cx="50%"
                                         cy="50%"
                                         outerRadius={100}
-                                        fill="#ffc658"
+                                        fill="#3f4a59"
                                         dataKey="value"
                                         label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                     >
@@ -399,7 +399,7 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <RechartsTooltip />
+                                    <RechartsTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                                     <Legend />
                                 </PieChart>
                             </ResponsiveContainer>

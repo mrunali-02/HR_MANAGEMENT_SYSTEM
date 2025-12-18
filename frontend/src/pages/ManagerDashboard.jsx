@@ -108,7 +108,7 @@ function ManagerDashboard() {
 
     try {
       // 1) Manager profile (Enhanced)
-      const profileRes = await axios.get(`${API_BASE_URL} /manager/${id} `, {
+      const profileRes = await axios.get(`${API_BASE_URL}/manager/${id}`, {
         headers: getAuthHeader(),
       });
       setManagerProfile(profileRes.data); // Use new state variable
@@ -117,10 +117,10 @@ function ManagerDashboard() {
       // 2) Team data
       try {
         const [attendanceRes, workRes, leavesRes, statsRes] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL} /manager/team / attendance`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL} /manager/team / work - hours`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL} /manager/team / leave - requests`, { headers: getAuthHeader() }),
-          axios.get(`${API_BASE_URL} /manager/team / stats`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/attendance`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/work-hours`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/leave-requests`, { headers: getAuthHeader() }),
+          axios.get(`${API_BASE_URL}/manager/team/stats`, { headers: getAuthHeader() }),
         ]);
 
         if (attendanceRes.status === 'fulfilled') {
@@ -405,25 +405,25 @@ function ManagerDashboard() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* My Attendance Card */}
-          <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-lg p-4 shadow flex flex-col justify-between">
+          <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-4 shadow-sm card-hover flex flex-col justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide opacity-80 mb-1">My Status</p>
-              <div className="text-xl font-bold">
+              <p className="text-xs uppercase tracking-wide text-secondary opacity-80 mb-1">My Status</p>
+              <div className="text-xl font-bold text-primary">
                 {myTodayAttendance?.status === 'present' ? 'Present' : 'Not Marked'}
               </div>
               {myTodayAttendance?.check_in && (
-                <div className="mt-1 text-xs opacity-90">In: {myTodayAttendance.check_in}</div>
+                <div className="mt-1 text-xs text-secondary opacity-90">In: {myTodayAttendance.check_in}</div>
               )}
               {myTodayAttendance?.check_out && (
-                <div className="mt-1 text-xs opacity-90">Out: {myTodayAttendance.check_out}</div>
+                <div className="mt-1 text-xs text-secondary opacity-90">Out: {myTodayAttendance.check_out}</div>
               )}
             </div>
             <div className="mt-3 space-y-2">
               <button
                 onClick={handleMarkMyAttendance}
-                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm ${attendanceMarked
-                  ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                  : 'bg-white text-indigo-600 hover:bg-indigo-50'
+                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm transition ${attendanceMarked
+                  ? 'bg-[color:var(--status-success)] text-white cursor-not-allowed opacity-90'
+                  : 'bg-[color:var(--accent-primary)] text-white hover:opacity-90'
                   }`}
                 disabled={attendanceMarked}
               >
@@ -432,9 +432,9 @@ function ManagerDashboard() {
 
               <button
                 onClick={handleMyCheckout}
-                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm ${!attendanceMarked || checkoutMarked
-                  ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                  : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                className={`w-full text-xs font-bold px-3 py-1.5 rounded shadow-sm transition ${!attendanceMarked || checkoutMarked
+                  ? 'bg-[color:var(--bg-main)] text-secondary cursor-not-allowed'
+                  : 'bg-[color:var(--status-success)] text-white hover:opacity-90'
                   }`}
                 disabled={!attendanceMarked || checkoutMarked}
               >
@@ -453,7 +453,7 @@ function ManagerDashboard() {
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-            <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+            <span className="text-xs bg-[color:var(--accent-primary)] text-white px-2 py-1 rounded-full">
               {notifications.length} New
             </span>
           </div>
@@ -461,7 +461,7 @@ function ManagerDashboard() {
             {notifications.length > 0 ? (
               <ul className="divide-y divide-gray-100">
                 {notifications.map((n) => (
-                  <li key={n.id} className={`py-3 flex items-start space-x-3 ${!n.is_read ? 'bg-blue-50/30' : ''}`}>
+                  <li key={n.id} className={`py-3 flex items-start space-x-3 ${!n.is_read ? 'bg-[color:var(--bg-main)]' : ''}`}>
                     <span className="text-xl">📢</span>
                     <div className="flex-1">
                       <p className="text-sm text-gray-900">{n.message}</p>
@@ -479,20 +479,20 @@ function ManagerDashboard() {
 
 
         {/* My Leave & Approval Overview (Moved from Profile) */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Leave & Approval Overview</h3>
+        <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+          <h3 className="text-lg font-semibold text-primary mb-4">Leave & Approval Overview</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-3 bg-yellow-50 rounded-lg">
-              <p className="text-2xl font-bold text-yellow-600">{managerProfile?.stats?.leaves?.pending || 0}</p>
-              <p className="text-xs text-yellow-700 font-medium uppercase mt-1">Pending</p>
+            <div className="p-3 bg-white border border-[color:var(--status-pending)] border-l-4 rounded-lg shadow-sm">
+              <p className="text-2xl font-bold text-primary">{managerProfile?.stats?.leaves?.pending || 0}</p>
+              <p className="text-xs text-secondary font-medium uppercase mt-1">Pending</p>
             </div>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">{managerProfile?.stats?.leaves?.approved || 0}</p>
-              <p className="text-xs text-green-700 font-medium uppercase mt-1">Approved</p>
+            <div className="p-3 bg-white border border-[color:var(--status-success)] border-l-4 rounded-lg shadow-sm">
+              <p className="text-2xl font-bold text-primary">{managerProfile?.stats?.leaves?.approved || 0}</p>
+              <p className="text-xs text-secondary font-medium uppercase mt-1">Approved</p>
             </div>
-            <div className="p-3 bg-red-50 rounded-lg">
-              <p className="text-2xl font-bold text-red-600">{managerProfile?.stats?.leaves?.rejected || 0}</p>
-              <p className="text-xs text-red-700 font-medium uppercase mt-1">Rejected</p>
+            <div className="p-3 bg-white border border-[color:var(--status-inactive)] border-l-4 rounded-lg shadow-sm">
+              <p className="text-2xl font-bold text-primary">{managerProfile?.stats?.leaves?.rejected || 0}</p>
+              <p className="text-xs text-secondary font-medium uppercase mt-1">Rejected</p>
             </div>
           </div>
         </div>
@@ -525,7 +525,7 @@ function ManagerDashboard() {
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-[#f0f4f8]">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Employee
@@ -592,7 +592,7 @@ function ManagerDashboard() {
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-[#f0f4f8]">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Employee
@@ -663,7 +663,7 @@ function ManagerDashboard() {
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-[#f0f4f8]">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Employee
@@ -719,12 +719,12 @@ function ManagerDashboard() {
                     <td className="px-4 py-2 whitespace-nowrap">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${la.status === 'approved'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-[color:var(--status-success)] text-white'
                           : la.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
+                            ? 'bg-[color:var(--status-inactive)] text-white'
                             : la.status === 'cancelled'
                               ? 'bg-gray-100 text-gray-500'
-                              : 'bg-yellow-100 text-yellow-800'
+                              : 'bg-[color:var(--status-pending)] text-white'
                           }`}
                       >
                         {la.status}
@@ -735,13 +735,13 @@ function ManagerDashboard() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleApproveTeamLeave(la.id)}
-                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700"
+                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-[color:var(--status-success)] text-white text-xs font-medium hover:opacity-90"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleRejectTeamLeave(la.id)}
-                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700"
+                            className="inline-flex items-center px-3 py-1.5 rounded-md bg-[color:var(--status-inactive)] text-white text-xs font-medium hover:opacity-90"
                           >
                             Reject
                           </button>
@@ -1566,15 +1566,15 @@ function ManagerDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 3. Team Information */}
           <div className="bg-white shadow-lg rounded-xl overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-gray-50 border-b flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-900">My Team</h3>
-              <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">{team.count} Members</span>
+            <div className="px-6 py-4 bg-[#f0f4f8] border-b flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-primary">My Team</h3>
+              <span className="bg-[color:var(--accent-primary)] text-white text-xs font-bold px-2 py-1 rounded-full">{team.count} Members</span>
             </div>
             <div className="p-0 flex-1 overflow-y-auto max-h-64">
               {team.members.length > 0 ? (
                 <ul className="divide-y divide-gray-100">
                   {team.members.map((member) => (
-                    <li key={member.id} className="px-6 py-3 hover:bg-gray-50 flex items-center space-x-3">
+                    <li key={member.id} className="px-6 py-3 hover:bg-[color:var(--bg-main)] flex items-center space-x-3">
                       <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center text-xs">
                         {member.photo_url ? <img src={member.photo_url} alt="" className="h-full w-full rounded-full" /> : member.name.charAt(0)}
                       </div>
@@ -1597,41 +1597,41 @@ function ManagerDashboard() {
 
           {/* 4. Work & Attendance Summary */}
           <div className="bg-white shadow-lg rounded-xl overflow-hidden p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Work & Attendance Summary</h3>
+            <h3 className="text-lg font-semibold text-primary mb-4">Work & Attendance Summary</h3>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-sm text-gray-500">Today's Status</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${stats?.work?.today_status === 'present' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${stats?.work?.today_status === 'present' ? 'bg-[color:var(--status-success)] text-white' : 'bg-gray-100 text-gray-600'}`}>
                   {stats?.work?.today_status?.toUpperCase() || 'NOT MARKED'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-sm text-gray-500">Monthly Hours</span>
-                <span className="text-lg font-bold text-indigo-600">{stats?.work?.month_hours || 0} hrs</span>
+                <span className="text-lg font-bold text-[color:var(--accent-primary)]">{stats?.work?.month_hours || 0} hrs</span>
               </div>
 
               <div>
                 <p className="text-sm text-gray-500 mb-2">Monthly Attendance Summary</p>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="bg-green-50 p-2 rounded">
-                    <div className="font-bold text-green-700">
+                  <div className="bg-white border border-[color:var(--status-success)] p-2 rounded">
+                    <div className="font-bold text-[color:var(--status-success)]">
                       {myAttendanceRecords.filter(r => r.status === 'present').length}
                     </div>
-                    <div className="text-green-600">Present</div>
+                    <div className="text-secondary text-xs">Present</div>
                   </div>
-                  <div className="bg-red-50 p-2 rounded">
-                    <div className="font-bold text-red-700">
+                  <div className="bg-white border border-[color:var(--status-inactive)] p-2 rounded">
+                    <div className="font-bold text-[color:var(--status-inactive)]">
                       {myAttendanceRecords.filter(r => r.status === 'absent').length}
                     </div>
-                    <div className="text-red-600">Absent</div>
+                    <div className="text-secondary text-xs">Absent</div>
                   </div>
-                  <div className="bg-yellow-50 p-2 rounded">
-                    <div className="font-bold text-yellow-700">
+                  <div className="bg-white border border-[color:var(--status-pending)] p-2 rounded">
+                    <div className="font-bold text-[color:var(--status-pending)]">
                       {myAttendanceRecords.filter(r => r.status === 'late').length}
                     </div>
-                    <div className="text-yellow-600">Late</div>
+                    <div className="text-secondary text-xs">Late</div>
                   </div>
                 </div>
               </div>
@@ -1668,7 +1668,7 @@ function ManagerDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
+      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
         <div className="h-16 flex items-center justify-center border-b border-slate-800">
           <span className="text-lg font-semibold tracking-wide">
             HRMS Manager
@@ -1679,8 +1679,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.DASHBOARD)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Dashboard
@@ -1688,8 +1688,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.ATTENDANCE)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.ATTENDANCE
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Team Attendance
@@ -1697,8 +1697,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.WORK_HOURS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.WORK_HOURS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Work Hours
@@ -1706,8 +1706,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.LEAVES)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVES
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Leave Requests
@@ -1715,8 +1715,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.APPLY_LEAVE)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.APPLY_LEAVE
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Apply Leave
@@ -1724,8 +1724,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.CALENDAR)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Calendar & Attendance
@@ -1733,8 +1733,8 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.REPORTS)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Team Reports
@@ -1742,15 +1742,15 @@ function ManagerDashboard() {
           <button
             onClick={() => setActiveTab(TABS.PROFILE)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.PROFILE
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Profile
           </button>
         </nav>
 
-        <div className="border-t border-slate-800 p-4">
+        <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
             className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
@@ -1763,10 +1763,10 @@ function ManagerDashboard() {
       {/* Main content */}
       <div className="flex-1 flex flex-col">
         {/* Top bar */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
           <div>
-            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-secondary">
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.ATTENDANCE && 'Team Attendance'}
               {activeTab === TABS.WORK_HOURS && 'Work Hours'}

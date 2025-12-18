@@ -146,7 +146,6 @@ function AdminDashboard() {
       maxLoginAttempts: 5,
       enableTwoFactorAuth: false,
       enableRememberMe: true,
-      enableRememberMe: true,
     },
   });
 
@@ -968,96 +967,95 @@ function AdminDashboard() {
 
       {/* Cards grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg card-hover">
-          <div className="text-sm uppercase tracking-wide opacity-80">Total Employees</div>
-          <div className="mt-2 text-3xl font-bold">
+        <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Total Employees</div>
+          <div className="mt-2 text-3xl font-bold text-primary">
             {summary.totalEmployees || totalEmployees}
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-5 shadow-lg card-hover">
-          <div className="text-sm uppercase tracking-wide opacity-80">Active Employees</div>
-          <div className="mt-2 text-3xl font-bold">{activeEmployeesCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-success)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Active Employees</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{activeEmployeesCount}</div>
         </div>
 
-        <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl p-5 shadow-lg card-hover">
-          <div className="text-sm uppercase tracking-wide opacity-80">Pending Leave Requests</div>
-          <div className="mt-2 text-3xl font-bold">{pendingLeaveCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-pending)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Pending Leave Requests</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{pendingLeaveCount}</div>
         </div>
 
-        <div className="bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-xl p-5 shadow-lg card-hover">
-          <div className="text-sm uppercase tracking-wide opacity-80">Today Attendance</div>
+        <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Today Attendance</div>
           <div className="mt-2 text-lg font-semibold flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-green-200"></span>
-              Present: {presentTodayCount}
+              <span className="h-2 w-2 rounded-full bg-[color:var(--status-success)]"></span>
+              <span className="text-primary">Present: {presentTodayCount}</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-red-200"></span>
-              Absent: {absentTodayCount}
+              <span className="h-2 w-2 rounded-full bg-[color:var(--status-inactive)]"></span>
+              <span className="text-secondary">Absent: {absentTodayCount}</span>
             </span>
           </div>
         </div>
-
-        <div className="rounded-xl p-5 shadow-sm bg-[#B3E5FC]/60 border border-[#B3E5FC]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Today's Leaves</div>
-          <div className="mt-2 text-3xl font-bold text-gray-800">{leavesTodayCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Today's Leaves</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{leavesTodayCount}</div>
         </div>
 
-        <div className="rounded-xl p-5 shadow-sm bg-[#F8BBD0]/60 border border-[#F8BBD0]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Total Managers</div>
-          <div className="mt-2 text-3xl font-bold text-gray-800">{totalManagersCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--text-secondary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Total Managers</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{totalManagersCount}</div>
         </div>
 
-        <div className="rounded-xl p-5 shadow-sm bg-[#C5CAE9]/60 border border-[#C5CAE9]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Total HR</div>
-          <div className="mt-2 text-3xl font-bold text-gray-800">{totalHrCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--text-secondary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Total HR</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{totalHrCount}</div>
         </div>
 
-        <div className="rounded-xl p-5 shadow-sm bg-[#FFE0B2]/60 border border-[#FFE0B2]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Total Admins</div>
-          <div className="mt-2 text-3xl font-bold text-gray-800">{totalAdminsCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--text-secondary)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Total Admins</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{totalAdminsCount}</div>
         </div>
 
-        <div className="rounded-xl p-5 shadow-sm bg-[#E1BEE7]/60 border border-[#E1BEE7]/30 backdrop-blur-sm card-hover">
-          <div className="text-sm uppercase tracking-wide text-gray-700 opacity-70">Inactive Employees</div>
-          <div className="mt-2 text-3xl font-bold text-gray-800">{inactiveEmployeesCount}</div>
+        <div className="bg-white border-l-4 border-[color:var(--status-inactive)] rounded-xl p-5 shadow-sm card-hover">
+          <div className="text-sm uppercase tracking-wide text-secondary">Inactive Employees</div>
+          <div className="mt-2 text-3xl font-bold text-primary">{inactiveEmployeesCount}</div>
         </div>
       </div>
 
       {/* Recent employees */}
       <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4 text-gray-900">Recent Employees</h3>
+        <h3 className="text-lg font-semibold mb-4 text-primary">Recent Employees</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-[#f0f4f8]">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">
                   Email
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">
                   Joined On
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {users.slice(0, 5).map((u) => (
-                <tr key={u.id}>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-primary">
                     {[u.first_name, u.middle_name, u.last_name].filter(Boolean).join(' ') || u.email}
 
                   </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{u.email}</td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 capitalize">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-secondary">{u.email}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-secondary capitalize">
                     {u.role}
                   </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-secondary">
                     {formatDate(u.joined_on)}
                   </td>
                 </tr>
@@ -1134,7 +1132,7 @@ function AdminDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 
   const handleEditClick = (employee) => {
@@ -2226,78 +2224,78 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-[color:var(--bg-main)] flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
-        <div className="h-16 flex items-center justify-center border-b border-slate-800">
-          <span className="text-lg font-semibold tracking-wide">HRMS Admin</span>
+      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
+        <div className="h-16 flex items-center justify-center border-b border-[#3f4a59]">
+          <span className="text-lg font-bold tracking-wide text-[#f6f3ee]">HRMS Admin</span>
         </div>
-        <nav className="flex-1 py-4 space-y-1">
+        <nav className="flex-1 py-4 space-y-1 px-3">
           <button
             onClick={() => setActiveTab(TABS.DASHBOARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.DASHBOARD
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Dashboard
           </button>
           <button
             onClick={() => setActiveTab(TABS.EMPLOYEES)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.EMPLOYEES
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.EMPLOYEES
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Employee List
           </button>
           <button
             onClick={() => setActiveTab(TABS.LEAVE_APPLICATIONS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVE_APPLICATIONS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.LEAVE_APPLICATIONS
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Leave Applications
           </button>
           <button
             onClick={() => setActiveTab(TABS.CALENDAR)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.CALENDAR
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Calendar & Holidays
           </button>
           <button
             onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.AUDIT_LOGS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.AUDIT_LOGS
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Audit Logs
           </button>
           <button
             onClick={() => setActiveTab(TABS.REPORTS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.REPORTS
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Reports
           </button>
           <button
             onClick={() => setActiveTab(TABS.SETTINGS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.SETTINGS
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.SETTINGS
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Settings
           </button>
         </nav>
-        <div className="border-t border-slate-800 p-4">
+        <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
             className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
@@ -2310,10 +2308,10 @@ function AdminDashboard() {
       {/* Main content */}
       <div className="flex-1 flex flex-col">
         {/* Top bar */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
           <div>
-            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-primary">
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}

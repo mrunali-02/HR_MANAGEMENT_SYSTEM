@@ -617,7 +617,7 @@ function EmployeeDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
+      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
         <div className="h-16 flex items-center justify-center border-b border-slate-800">
           <span className="text-lg font-semibold tracking-wide">Employee Panel</span>
         </div>
@@ -626,8 +626,8 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'dashboard'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Dashboard
@@ -635,8 +635,8 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('attendance')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'attendance'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Attendance
@@ -644,8 +644,8 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('calendar')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'calendar'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Calendar
@@ -653,8 +653,8 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('leaves')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'leaves'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Leaves
@@ -662,8 +662,8 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('reports')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'reports'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Reports
@@ -671,15 +671,15 @@ function EmployeeDashboard() {
           <button
             onClick={() => setActiveTab('settings')}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'settings'
-              ? 'bg-slate-800 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
               }`}
           >
             Settings
           </button>
         </nav>
 
-        <div className="border-t border-slate-800 p-4">
+        <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
             className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
@@ -692,10 +692,10 @@ function EmployeeDashboard() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Top Header */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
           <div>
-            <h1 className="text-xl font-bold text-indigo-700 block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
+            <h2 className="text-lg font-semibold text-secondary">
               {activeTab === 'dashboard' ? 'Overview' :
                 activeTab === 'attendance' ? 'Attendance History' :
                   activeTab === 'calendar' ? 'Calendar' :
@@ -739,13 +739,13 @@ function EmployeeDashboard() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
 
-                {/* 1. Attendance Card (Blue Gradient) */}
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl p-5 shadow-lg flex flex-col justify-between h-full">
+                {/* 1. Attendance Card */}
+                <div className="bg-white border-l-4 border-[color:var(--accent-primary)] rounded-xl p-5 shadow-sm card-hover flex flex-col justify-between h-full">
                   <div>
-                    <div className="text-sm uppercase tracking-wide opacity-80">Today's Status</div>
-                    <div className="mt-2 text-2xl font-bold">
+                    <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Today's Status</div>
+                    <div className="mt-2 text-2xl font-bold text-primary">
                       {todayAttendance?.status === 'present'
                         ? 'Present'
                         : todayAttendance?.status === 'absent'
@@ -753,17 +753,17 @@ function EmployeeDashboard() {
                           : 'Not Marked'}
                     </div>
                     {todayAttendance?.check_in && (
-                      <div className="mt-1 text-xs opacity-75">
+                      <div className="mt-1 text-xs text-secondary opacity-75">
                         In: {todayAttendance.check_in}
                       </div>
                     )}
                     {todayAttendance?.check_out && (
-                      <div className="mt-1 text-xs opacity-75">
+                      <div className="mt-1 text-xs text-secondary opacity-75">
                         Out: {todayAttendance.check_out}
                       </div>
                     )}
                     {todayAttendance?.total_hours && (
-                      <div className="mt-1 text-xs opacity-75 font-semibold">
+                      <div className="mt-1 text-xs text-secondary opacity-75 font-semibold">
                         Hours: {todayAttendance.total_hours}
                         {todayAttendance.overtime_hours && parseFloat(todayAttendance.overtime_hours) > 0 && (
                           <span className="ml-1">(+{todayAttendance.overtime_hours} OT)</span>
@@ -776,8 +776,8 @@ function EmployeeDashboard() {
                       onClick={handleMarkAttendance}
                       disabled={attendanceMarked || todayAttendance?.status === 'present'}
                       className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${attendanceMarked || todayAttendance?.status === 'present'
-                        ? 'bg-green-500 text-white cursor-not-allowed opacity-90'
-                        : 'bg-white text-indigo-600 hover:bg-indigo-50 shadow-md'
+                        ? 'bg-[color:var(--status-success)] text-white cursor-not-allowed opacity-90'
+                        : 'bg-[color:var(--accent-primary)] text-white hover:opacity-90 shadow-md'
                         }`}
                     >
                       {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
@@ -787,8 +787,8 @@ function EmployeeDashboard() {
                       onClick={handleCheckout}
                       disabled={!attendanceMarked || checkoutMarked}
                       className={`w-full text-xs font-bold px-3 py-2 rounded-lg transition ${!attendanceMarked || checkoutMarked
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-md'
+                        ? 'bg-[color:var(--bg-main)] text-secondary cursor-not-allowed'
+                        : 'bg-[color:var(--status-success)] text-white hover:opacity-90 shadow-md'
                         }`}
                     >
                       {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
@@ -796,18 +796,18 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* 2. Leave Balance (Green Gradient) */}
-                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-5 shadow-lg h-full flex flex-col justify-between">
+                {/* 2. Leave Balance */}
+                <div className="bg-white border-l-4 border-[color:var(--status-success)] rounded-xl p-5 shadow-sm card-hover h-full flex flex-col justify-between">
                   <div>
-                    <div className="text-sm uppercase tracking-wide opacity-80">Leave Balance</div>
-                    <div className="mt-2 text-3xl font-bold">
+                    <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Leave Balance</div>
+                    <div className="mt-2 text-3xl font-bold text-primary">
                       {(leaveBalance.sick || 0) + (leaveBalance.casual || 0) + (leaveBalance.paid || 0)}/24
                     </div>
-                    <div className="mt-1 text-xs opacity-80">
+                    <div className="mt-1 text-xs text-secondary opacity-80">
                       Days Remaining
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-1 text-xs opacity-90 font-medium">
+                  <div className="mt-4 grid grid-cols-3 gap-1 text-xs text-secondary opacity-90 font-medium">
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Planned</span>
                       <span className="text-sm">{leaveBalance.paid}</span>
@@ -823,46 +823,46 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Attendance Rate Card (White) */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+                {/* 3. Attendance Rate Card */}
+                <div className="bg-white border-l-4 border-[#3f4a59] p-6 rounded-xl shadow-sm h-full flex flex-col justify-between card-hover">
                   <div>
                     <div className="flex items-center justify-between pb-4">
-                      <h3 className="text-sm font-medium text-gray-500">Attendance Rate</h3>
-                      <div className="p-2 bg-blue-50 rounded-full">
-                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <h3 className="text-sm font-medium text-secondary">Attendance Rate</h3>
+                      <div className="p-2 bg-[color:var(--bg-main)] rounded-full">
+                        <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-primary">
                       {attendanceRecords.length > 0
                         ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100)
                         : 0}%
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Based on last 30 days</p>
+                    <p className="text-xs text-secondary mt-1">Based on last 30 days</p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-4">
-                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${attendanceRecords.length > 0 ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100) : 0}%` }}></div>
+                  <div className="w-full bg-[color:var(--bg-main)] rounded-full h-1.5 mt-4">
+                    <div className="bg-[color:var(--accent-primary)] h-1.5 rounded-full" style={{ width: `${attendanceRecords.length > 0 ? Math.round((attendanceRecords.filter(r => r.status === 'present').length / attendanceRecords.length) * 100) : 0}%` }}></div>
                   </div>
                 </div>
 
-                {/* 4. Overtime Hours Card (White) */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+                {/* 4. Overtime Hours Card */}
+                <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm h-full flex flex-col justify-between card-hover">
                   <div>
                     <div className="flex items-center justify-between pb-4">
-                      <h3 className="text-sm font-medium text-gray-500">Overtime Hours</h3>
-                      <div className="p-2 bg-orange-50 rounded-full">
-                        <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <h3 className="text-sm font-medium text-secondary">Overtime Hours</h3>
+                      <div className="p-2 bg-[color:var(--bg-main)] rounded-full">
+                        <svg className="w-5 h-5 text-[color:var(--status-pending)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-primary">
                       {attendanceRecords.reduce((acc, curr) => acc + (parseFloat(curr.overtime_hours) || 0), 0).toFixed(1)}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Total Overtime (30 Days)</p>
+                    <p className="text-xs text-secondary mt-1">Total Overtime (30 Days)</p>
                   </div>
-                  <div className="mt-4 text-xs text-gray-400">
+                  <div className="mt-4 text-xs text-secondary opacity-60">
                     Accumulated overtime.
                   </div>
                 </div>
@@ -898,14 +898,14 @@ function EmployeeDashboard() {
                   {!(attendanceMarked || todayAttendance?.status === 'present') ? (
                     <button
                       onClick={handleMarkAttendance}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold transition"
+                      className="bg-[color:var(--accent-primary)] text-white px-4 py-2 rounded-lg shadow-md hover:opacity-90 text-sm font-bold transition"
                     >
                       Check In Now
                     </button>
                   ) : (
                     <button
                       disabled
-                      className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
+                      className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
                     >
                       ✓ Checked In
                     </button>
@@ -913,7 +913,7 @@ function EmployeeDashboard() {
                   {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
                     <button
                       onClick={handleCheckout}
-                      className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-emerald-600 text-sm font-bold transition"
+                      className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg shadow-md hover:opacity-90 text-sm font-bold transition"
                     >
                       Check Out
                     </button>
@@ -921,7 +921,7 @@ function EmployeeDashboard() {
                   {checkoutMarked && todayAttendance?.check_out && (
                     <button
                       disabled
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
+                      className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
                     >
                       ✓ Checked Out
                     </button>
@@ -931,7 +931,7 @@ function EmployeeDashboard() {
               <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-[#f0f4f8]">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -955,10 +955,10 @@ function EmployeeDashboard() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${rec.status === 'present'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-[color:var(--status-success)] text-white'
                               : rec.status === 'absent'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-[color:var(--status-inactive)] text-white'
+                                : 'bg-[color:var(--status-pending)] text-white'
                               }`}>
                               {rec.status}
                             </span>
@@ -1097,7 +1097,7 @@ function EmployeeDashboard() {
                     <button
                       type="submit"
                       disabled={leaveSubmitting}
-                      className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
+                      className="bg-[color:var(--accent-primary)] text-white px-6 py-2 rounded-lg shadow-md hover:opacity-90 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
                     >
                       {leaveSubmitting ? 'Submitting...' : 'Submit Request'}
                     </button>
@@ -1110,7 +1110,7 @@ function EmployeeDashboard() {
                 <h3 className="text-lg font-semibold mb-4 text-gray-900">Request History</h3>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-[#f0f4f8]">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
@@ -1152,12 +1152,12 @@ function EmployeeDashboard() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${l.status === 'approved'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-[color:var(--status-success)] text-white'
                               : l.status === 'rejected'
-                                ? 'bg-red-100 text-red-800'
+                                ? 'bg-[color:var(--status-inactive)] text-white'
                                 : l.status === 'cancelled'
                                   ? 'bg-gray-100 text-gray-500'
-                                  : 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-[color:var(--status-pending)] text-white'
                               }`}>
                               {l.status}
                             </span>
@@ -1274,7 +1274,7 @@ function EmployeeDashboard() {
                       <button
                         type="submit"
                         disabled={settingsSaving}
-                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-indigo-700 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
+                        className="bg-[color:var(--accent-primary)] text-white px-6 py-2 rounded-lg shadow-md hover:opacity-90 text-sm font-bold uppercase tracking-wider transition-transform transform hover:-translate-y-1"
                       >
                         {settingsSaving ? 'Saving...' : 'Save Changes'}
                       </button>
