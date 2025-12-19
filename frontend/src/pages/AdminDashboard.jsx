@@ -1441,8 +1441,8 @@ function AdminDashboard() {
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.joined_on}
                     onChange={(e) => setFormData({ ...formData, joined_on: e.target.value })}
-                    onKeyDown={(e) => e.preventDefault()}
-                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+
+
                   />
                 </div>
                 <div>
@@ -1454,8 +1454,8 @@ function AdminDashboard() {
                     value={formData.dob}
                     max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    onKeyDown={(e) => e.preventDefault()}
-                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+
+
                   />
                 </div>
                 <div>

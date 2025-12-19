@@ -128,8 +128,10 @@ export async function getAttendance(req, res) {
     END,
     '00:00'
   ) AS total_hours_calc,
-  wh.is_late,
-  wh.is_left_early
+
+  COALESCE(wh.is_late, IF(a.check_in_time > '10:00:00', 1, 0)) as is_late,
+  COALESCE(wh.is_left_early, IF(a.check_out_time IS NOT NULL AND a.check_out_time < '19:00:00', 1, 0)) as is_left_early
+
 
 
 `;
@@ -224,15 +226,27 @@ export async function markAttendance(req, res) {
     const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
     const MAX_DISTANCE = Math.max(parseFloat(process.env.MAX_DISTANCE || '50'), 5000); // Relaxed for testing
 
-    const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-    console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
+    // Check for active WFH
+    const [wfh] = await db.execute(
+      "SELECT id FROM leave_requests WHERE user_id = ? AND type = 'work_from_home' AND status = 'approved' AND CURDATE() BETWEEN start_date AND end_date",
+      [userId]
+    );
+    const isWfh = wfh.length > 0;
 
-    if (distance > MAX_DISTANCE) {
-      return res.status(400).json({
-        error: 'You must be within the permitted attendance zone.',
-        distance: Math.round(distance),
-        max_distance: MAX_DISTANCE
-      });
+    // Only validate distance if NOT WFH and Office coords are set
+    if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
+      const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+      console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
+
+      if (distance > MAX_DISTANCE) {
+        return res.status(400).json({
+          error: 'You must be within the permitted attendance zone.',
+          distance: Math.round(distance),
+          max_distance: MAX_DISTANCE
+        });
+      }
+    } else {
+      console.log('Attendance Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
     }
 
     const now = new Date();
@@ -687,15 +701,27 @@ export async function markCheckout(req, res) {
     const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG);
     const MAX_DISTANCE = Math.max(parseFloat(process.env.MAX_DISTANCE || '50'), 5000); // Relaxed for testing
 
-    const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-    console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
+    // Check for active WFH
+    const [wfh] = await db.execute(
+      "SELECT id FROM leave_requests WHERE user_id = ? AND type = 'work_from_home' AND status = 'approved' AND CURDATE() BETWEEN start_date AND end_date",
+      [userId]
+    );
+    const isWfh = wfh.length > 0;
 
-    if (distance > MAX_DISTANCE) {
-      return res.status(400).json({
-        error: 'You must be within the permitted attendance zone to check out.',
-        distance: Math.round(distance),
-        max_distance: MAX_DISTANCE
-      });
+    // Only validate distance if NOT WFH and Office coords are set
+    if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
+      const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+      console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
+
+      if (distance > MAX_DISTANCE) {
+        return res.status(400).json({
+          error: 'You must be within the permitted attendance zone to check out.',
+          distance: Math.round(distance),
+          max_distance: MAX_DISTANCE
+        });
+      }
+    } else {
+      console.log('Checkout Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
     }
 
     const now = new Date();

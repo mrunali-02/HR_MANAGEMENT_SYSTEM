@@ -529,6 +529,99 @@ export async function approveLeaveRequest(req, res) {
   }
 }
 
+export async function updateLeaveDates(req, res) {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate } = req.body;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Start date and end date are required' });
+    }
+
+    // 1. Fetch existing leave
+    const [leaveRows] = await db.execute(
+      `SELECT * FROM leave_requests WHERE id = ?`,
+      [id]
+    );
+
+    if (leaveRows.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
+    }
+
+    const leave = leaveRows[0];
+
+    // Only allow for 'approved' and 'paid' (Planned) leaves or potentially 'casual' if needed. 
+    // User asked "for approved employee planned leaves".
+    if (leave.status !== 'approved' || leave.type !== 'paid') {
+      return res.status(400).json({ error: 'Can only edit dates for approved Planned leaves' });
+    }
+
+    // 2. Calculate old days
+    const oldStart = new Date(leave.start_date);
+    const oldEnd = new Date(leave.end_date);
+    const oldDays = leave.days || Math.ceil((oldEnd - oldStart) / (1000 * 60 * 60 * 24)) + 1;
+
+    // 3. Calculate new days
+    const newStart = new Date(startDate);
+    const newEnd = new Date(endDate);
+
+    if (newEnd < newStart) {
+      return res.status(400).json({ error: 'End date cannot be before start date' });
+    }
+
+    // Fetch holidays
+    const [holidays] = await db.execute('SELECT date FROM holidays');
+    const holidayDates = holidays.map(h => {
+      let hDate = h.date;
+      if (typeof h.date === 'string') {
+        hDate = h.date;
+      } else {
+        hDate = h.date.toISOString().split('T')[0];
+      }
+      return hDate;
+    });
+
+    let newDays = 0;
+    let cur = new Date(newStart);
+    while (cur <= newEnd) {
+      const dStr = cur.toISOString().split('T')[0];
+      // Check if holiday
+      if (!holidayDates.includes(dStr)) {
+        newDays++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const diff = oldDays - newDays;
+
+    // 4. Update Balance
+    // Since balance is calculated dynamically from leave_requests in userController.getLeaveBalance, 
+    // we do NOT need to manually update a leave_balances table (which appears to be unused for current logic).
+    // Updating the leave_request dates and days below is sufficient.
+
+    // 5. Update Leave Request
+    await db.execute(
+      `UPDATE leave_requests SET start_date = ?, end_date = ?, days = ? WHERE id = ?`,
+      [startDate, endDate, newDays, id]
+    );
+
+    // 6. Log Audit
+    await logAudit(req.user.id, 'leave_dates_updated', {
+      leave_id: id,
+      old_days: oldDays,
+      new_days: newDays,
+      old_start: leave.start_date,
+      new_start: startDate
+    });
+
+    res.json({ message: 'Leave dates updated successfully', newDays });
+
+  } catch (error) {
+    console.error('Update leave dates error:', error);
+    res.status(500).json({ error: 'Failed to update leave dates' });
+  }
+}
+
 export async function rejectLeaveRequest(req, res) {
   try {
     // Check if the user whose leave is being processed is an HR

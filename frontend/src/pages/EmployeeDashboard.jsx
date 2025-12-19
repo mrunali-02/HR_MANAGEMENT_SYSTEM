@@ -1049,7 +1049,7 @@ function EmployeeDashboard() {
                         type="date"
                         value={leaveForm.startDate}
                         onChange={(e) => handleLeaveFormChange('startDate', e.target.value)}
-                        onKeyDown={(e) => e.preventDefault()}
+
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
@@ -1060,7 +1060,7 @@ function EmployeeDashboard() {
                         min={leaveForm.startDate}
                         value={leaveForm.endDate}
                         onChange={(e) => handleLeaveFormChange('endDate', e.target.value)}
-                        onKeyDown={(e) => e.preventDefault()}
+
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>

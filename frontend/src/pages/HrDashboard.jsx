@@ -127,6 +127,7 @@ function HrDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [editDateModal, setEditDateModal] = useState({ open: false, leaveId: null, startDate: '', endDate: '' });
 
   useEffect(() => {
     if (!user || user.role !== 'hr') {
@@ -1092,6 +1093,31 @@ function HrDashboard() {
     );
   };
 
+  /* ---------- Renderers ---------- */
+
+  const handleEditDatesSubmit = async (e) => {
+    e.preventDefault();
+    if (!editDateModal.startDate || !editDateModal.endDate) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/hr/leave-requests/${editDateModal.leaveId}/dates`,
+        { startDate: editDateModal.startDate, endDate: editDateModal.endDate },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSuccess('Leave dates updated successfully');
+      setEditDateModal({ open: false, leaveId: null, startDate: '', endDate: '' });
+      fetchLeaveApplications(); // Refresh list
+      fetchLeaveStatistics(); // Refresh stats (balance changes)
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error updating leave dates:', err);
+      setError(err.response?.data?.error || 'Failed to update leave dates');
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
   const renderLeaveApplications = () => {
     const calculateDays = (start, end) => {
       if (!start || !end) return 0;
@@ -1173,7 +1199,19 @@ function HrDashboard() {
                     <span className="text-xs text-amber-600 italic mt-1 font-medium bg-amber-50 px-2 py-1 rounded border border-amber-200">Requires Admin Approval</span>
                   )}
                 </>
-              ) : <span className="text-xs text-gray-400 italic mt-1">Processed</span>}
+              ) : (
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs text-gray-400 italic mt-1">Processed</span>
+                  {la.status === 'approved' && la.type === 'paid' && (
+                    <button
+                      onClick={() => setEditDateModal({ open: true, leaveId: la.id, startDate: la.start_date, endDate: la.end_date })}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-xs rounded font-medium transition"
+                    >
+                      Edit Dates
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -1689,6 +1727,54 @@ function HrDashboard() {
     setSickLeaveModal(prev => ({ ...prev, [field]: value }));
   };
 
+  const renderEditDateModal = () => {
+    if (!editDateModal.open) return null;
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 className="text-lg font-bold mb-4">Edit Leave Dates</h3>
+          <form onSubmit={handleEditDatesSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Start Date</label>
+              <input
+                type="date"
+                required
+                value={editDateModal.startDate ? editDateModal.startDate.substring(0, 10) : ''}
+                onChange={(e) => setEditDateModal(prev => ({ ...prev, startDate: e.target.value }))}
+                className="mt-1 w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">End Date</label>
+              <input
+                type="date"
+                required
+                value={editDateModal.endDate ? editDateModal.endDate.substring(0, 10) : ''}
+                onChange={(e) => setEditDateModal(prev => ({ ...prev, endDate: e.target.value }))}
+                className="mt-1 w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => setEditDateModal({ open: false, leaveId: null, startDate: '', endDate: '' })}
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Update
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const renderSickLeaveModal = () => {
     if (!sickLeaveModal.open) return null;
     return (
@@ -2036,6 +2122,7 @@ function HrDashboard() {
           {activeTab === TABS.WORK_HOURS && renderWorkHours()}
           {activeTab === TABS.SETTINGS && renderSettings()}
           {renderSickLeaveModal()}
+          {renderEditDateModal()}
         </main>
       </div>
     </div>
