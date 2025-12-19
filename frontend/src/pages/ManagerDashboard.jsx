@@ -44,6 +44,7 @@ function ManagerDashboard() {
     document: null
   });
   const [myLeaveSubmitting, setMyLeaveSubmitting] = useState(false);
+  const [leaveBalance, setLeaveBalance] = useState({ sick: 0, casual: 0, paid: 0, used: 0, total: 0 });
 
   // Manager-specific data
   const [teamAttendance, setTeamAttendance] = useState([]);
@@ -102,6 +103,17 @@ function ManagerDashboard() {
     };
   };
 
+  const fetchMyLeaveBalance = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/employee/${id}/leave-balance`, {
+        headers: getAuthHeader(),
+      });
+      setLeaveBalance(res.data || { sick: 0, casual: 0, paid: 0, used: 0, total: 0 });
+    } catch (err) {
+      console.error('Error fetching leave balance:', err);
+    }
+  };
+
   const loadManagerData = async () => {
     setLoading(true);
     setError('');
@@ -146,6 +158,11 @@ function ManagerDashboard() {
         } else {
           setTeamStats(null);
         }
+
+        // Fetch personal leave balance
+        await fetchMyLeaveBalance();
+        // Fetch personal leaves
+        await fetchMyLeaves();
       } catch (innerErr) {
         console.error('Manager team data error:', innerErr);
       }
@@ -442,6 +459,54 @@ function ManagerDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Leave Balance Pie Chart */}
+          <div className="bg-white shadow rounded-lg p-4 flex flex-col items-center justify-center">
+            <p className="text-xs text-gray-500 uppercase mb-2 w-full text-left">Your Leave Balance</p>
+            <div className="h-32 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Sick', value: leaveBalance?.sick || 0, color: '#EF4444' }, // red
+                      { name: 'Casual', value: leaveBalance?.casual || 0, color: '#10B981' }, // green
+                      { name: 'Planned', value: leaveBalance?.paid || 0, color: '#8B5CF6' }, // purple
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={60}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {[
+                      { name: 'Sick', value: leaveBalance?.sick || 0, color: '#EF4444' },
+                      { name: 'Casual', value: leaveBalance?.casual || 0, color: '#10B981' },
+                      { name: 'Planned', value: leaveBalance?.paid || 0, color: '#8B5CF6' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex gap-2 text-xs mt-2 w-full justify-around">
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                <span>Sick: {leaveBalance?.sick || 0}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span>Cas: {leaveBalance?.casual || 0}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                <span>Pln: {leaveBalance?.paid || 0}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white shadow rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Team Size</p>
             <p className="text-2xl font-semibold text-gray-900">{teamSize}</p>
@@ -791,6 +856,7 @@ function ManagerDashboard() {
   };
 
   // ---------- CSV EXPORT LOGIC ----------
+
   const downloadCSV = (data, filename) => {
     if (!data || data.length === 0) {
       alert('No data to export');

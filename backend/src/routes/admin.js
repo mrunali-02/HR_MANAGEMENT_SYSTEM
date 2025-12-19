@@ -50,6 +50,7 @@ import {
   exportAttendance,
   exportLeaves,
   exportWorkHoursExcel,
+  createAdminLeave,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -62,6 +63,9 @@ router.use(authToken, requireRole('admin'));
 
 // Dashboard summary
 router.get('/dashboard/summary', getDashboardSummary);
+
+// Admin Leave Broadcast
+router.post('/leaves/create-broadcast', createAdminLeave);
 
 // Employee Management
 router.post('/employees', addEmployee);

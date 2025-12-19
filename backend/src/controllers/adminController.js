@@ -530,6 +530,52 @@ export async function approveLeaveRequest(req, res) {
   }
 }
 
+export async function createAdminLeave(req, res) {
+  try {
+    const { startDate, endDate, reason } = req.body;
+    const adminId = req.user.id;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Start and end dates are required' });
+    }
+
+    // 1. Create auto-approved leave request
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end - start);
+    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const [result] = await db.execute(
+      `INSERT INTO leave_requests (user_id, type, start_date, end_date, reason, status, reviewed_by, days) 
+       VALUES (?, 'paid', ?, ?, ?, 'approved', ?, ?)`,
+      [adminId, startDate, endDate, reason || 'Admin Leave', adminId, days]
+    );
+
+    // 2. Broadcast Notification to ALL active employees
+    // We can do this with a single INSERT ... SELECT query for efficiency
+    const message = `Admin ${req.user.name || 'Administrator'} is on leave from ${formatDate(start)} to ${formatDate(end)}.`;
+
+    await db.execute(
+      `INSERT INTO notifications (user_id, message) 
+       SELECT id, ? FROM employees WHERE status = 'active'`,
+      [message]
+    );
+
+    // 3. Log Audit
+    await logAudit(adminId, 'admin_leave_broadcast', {
+      leave_id: result.insertId,
+      start_date: startDate,
+      end_date: endDate
+    });
+
+    res.status(201).json({ message: 'Admin leave created and broadcasted successfully' });
+
+  } catch (error) {
+    console.error('Create admin leave error:', error);
+    res.status(500).json({ error: 'Failed to create admin leave' });
+  }
+}
+
 export async function updateLeaveDates(req, res) {
   try {
     const { id } = req.params;
@@ -669,7 +715,9 @@ export async function rejectLeaveRequest(req, res) {
 export async function createApprovedLeave(req, res) {
   try {
     const { employeeId } = req.params;
-    const { start_date, end_date, reason } = req.body;
+    const { start_date, end_date, reason, type } = req.body;
+
+    const leaveType = type || 'sick'; // Default to sick if not provided
 
     if (!start_date || !end_date || !reason) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -679,27 +727,28 @@ export async function createApprovedLeave(req, res) {
     // reviewed_by = req.user.id (the HR who added it)
     await db.execute(
       `INSERT INTO leave_requests (user_id, type, start_date, end_date, reason, status, reviewed_by)
-       VALUES (?, 'sick', ?, ?, ?, 'approved', ?)`,
-      [employeeId, start_date, end_date, reason, req.user.id]
+       VALUES (?, ?, ?, ?, ?, 'approved', ?)`,
+      [employeeId, leaveType, start_date, end_date, reason, req.user.id]
     );
 
     // Notification
+    const typeLabel = leaveType.charAt(0).toUpperCase() + leaveType.slice(1);
     await createNotification(
       employeeId,
-      `HR has added a Sick Leave record for you from ${start_date} to ${end_date}.`
+      `HR has added a ${typeLabel} Leave record for you from ${start_date} to ${end_date}.`
     );
 
     // Audit log
     await logAudit(req.user.id, 'leave_created_admin', {
       employee_id: employeeId,
-      type: 'sick',
+      type: leaveType,
       status: 'approved'
     });
 
-    res.json({ message: 'Sick leave added and approved successfully' });
+    res.json({ message: `${typeLabel} leave added and approved successfully` });
   } catch (error) {
     console.error('Create approved leave error:', error);
-    res.status(500).json({ error: 'Failed to create sick leave' });
+    res.status(500).json({ error: `Failed to create ${type || 'sick'} leave` });
   }
 }
 

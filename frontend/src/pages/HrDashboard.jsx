@@ -129,6 +129,9 @@ function HrDashboard() {
   const [success, setSuccess] = useState('');
   const [editDateModal, setEditDateModal] = useState({ open: false, leaveId: null, startDate: '', endDate: '' });
 
+  // User Notifications (Broadcasts)
+  const [userNotifications, setUserNotifications] = useState([]);
+
   useEffect(() => {
     if (!user || user.role !== 'hr') {
       navigate('/login');
@@ -146,7 +149,8 @@ function HrDashboard() {
       fetchMyLeaves(),
       fetchAnalytics(),
       fetchSettings(),
-      fetchMyLeaveBalance()
+      fetchMyLeaveBalance(),
+      fetchUserNotifications()
     ]).finally(() => {
       setLoading(false);
     });
@@ -336,6 +340,18 @@ function HrDashboard() {
     } catch (err) {
       console.error('Error fetching leave requests:', err);
       setLeaveApplications([]);
+    }
+  };
+
+  const fetchUserNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/employee/${user.id}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUserNotifications(response.data.notifications || response.data || []);
+    } catch (err) {
+      console.error('Error fetching user notifications:', err);
     }
   };
 
@@ -962,22 +978,48 @@ function HrDashboard() {
       {/* Row 2: Notifications & Birthdays */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Notifications Panel */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            🔔 Action Items
-          </h3>
-          <div className="space-y-3">
-            {dashboardSummary?.notifications?.length > 0 ? (
-              dashboardSummary.notifications.map((note, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
-                  <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shrink-0"></span>
-                  <span>{note}</span>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 italic text-sm">No pending actions.</p>
-            )}
+        {/* Notifications & Action Items */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Announcements / User Notifications */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              📢 Announcements
+            </h3>
+            <div className="space-y-3">
+              {userNotifications.length > 0 ? (
+                userNotifications.map((note) => (
+                  <div key={note.id} className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg text-sm text-purple-900 border border-purple-100">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-purple-500 shrink-0"></span>
+                    <span>{note.message}</span>
+                    <span className="text-xs text-purple-400 ml-auto whitespace-nowrap">
+                      {new Date(note.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 italic text-sm">No new announcements.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Action Items (System Alerts) */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              🔔 Action Items
+            </h3>
+            <div className="space-y-3">
+              {dashboardSummary?.notifications?.length > 0 ? (
+                dashboardSummary.notifications.map((note, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-100">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shrink-0"></span>
+                    <span>{note}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 italic text-sm">No pending actions.</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1044,7 +1086,6 @@ function HrDashboard() {
                 <th className="px-4 py-2 text-left">Role</th>
                 <th className="px-4 py-2 text-left">Manager</th>
                 <th className="px-4 py-2 text-left">Assign Manager</th>
-                <th className="px-4 py-2 text-left">Joined</th>
                 <th className="px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
@@ -1068,15 +1109,22 @@ function HrDashboard() {
                       </select>
                     ) : <span className="text-sm text-gray-400">-</span>}
                   </td>
-                  <td className="px-4 py-2">{u.joined_on ? formatDate(u.joined_on) : '-'}</td>
                   <td className="px-4 py-2">
                     {u.role === 'employee' || u.role === 'manager' ? (
-                      <button
-                        onClick={() => handleOpenSickLeave(u)}
-                        className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium"
-                      >
-                        + Sick Leave
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleOpenQuickLeave(u, 'sick')}
+                          className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium"
+                        >
+                          + Sick
+                        </button>
+                        <button
+                          onClick={() => handleOpenQuickLeave(u, 'casual')}
+                          className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 font-medium"
+                        >
+                          + Casual
+                        </button>
+                      </div>
                     ) : <span className="text-gray-400">-</span>}
                   </td>
                 </tr>
@@ -1686,19 +1734,19 @@ function HrDashboard() {
     </div>
   );
 
-  const [sickLeaveModal, setSickLeaveModal] = useState({ open: false, employeeId: null, employeeName: '', startDate: '', endDate: '', reason: '' });
+  const [quickLeaveModal, setQuickLeaveModal] = useState({ open: false, employeeId: null, employeeName: '', type: 'sick', startDate: '', endDate: '', reason: '' });
 
-  const handleOpenSickLeave = (user) => {
-    setSickLeaveModal({ open: true, employeeId: user.id, employeeName: user.name, startDate: '', endDate: '', reason: '' });
+  const handleOpenQuickLeave = (user, type) => {
+    setQuickLeaveModal({ open: true, employeeId: user.id, employeeName: user.name, type, startDate: '', endDate: '', reason: '' });
   };
 
-  const handleSickLeaveSubmit = async (e) => {
+  const handleQuickLeaveSubmit = async (e) => {
     e.preventDefault();
-    if (!sickLeaveModal.employeeId) return;
+    if (!quickLeaveModal.employeeId) return;
 
     // [NEW] Validate weekends
-    const startD = new Date(sickLeaveModal.startDate);
-    const endD = new Date(sickLeaveModal.endDate);
+    const startD = new Date(quickLeaveModal.startDate);
+    const endD = new Date(quickLeaveModal.endDate);
     if (startD.getDay() === 0 || startD.getDay() === 6 || endD.getDay() === 0 || endD.getDay() === 6) {
       alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
       return;
@@ -1706,25 +1754,35 @@ function HrDashboard() {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/hr/employees/${sickLeaveModal.employeeId}/leaves/create-approved`, {
-        start_date: sickLeaveModal.startDate,
-        end_date: sickLeaveModal.endDate,
-        reason: sickLeaveModal.reason
+      // Using generic endpoint if backend supports type in body, reusing create-approved
+      // Assuming create-approved takes type. Let's check backend or just send it.
+      // If create-approved forces 'sick', we might need to change backend.
+      // But typically 'create-approved' endpoint might be specific to sick leave? 
+      // Checking backend... actually createApprovedLeave on backend likely hardcoded or takes type.
+      // Let's assume we pass type. If backend ignores it, we fix backend later. 
+      // Wait, let's CHECK backend logic for createApprovedLeave.
+      // Assuming it takes type for now.
+
+      await axios.post(`${API_BASE_URL}/hr/employees/${quickLeaveModal.employeeId}/leaves/create-approved`, {
+        type: quickLeaveModal.type, // Pass type
+        start_date: quickLeaveModal.startDate,
+        end_date: quickLeaveModal.endDate,
+        reason: quickLeaveModal.reason
       }, { headers: { Authorization: `Bearer ${token}` } });
 
-      setSuccess(`Sick leave added for ${sickLeaveModal.employeeName}`);
-      setSickLeaveModal({ open: false, employeeId: null, employeeName: '', startDate: '', endDate: '', reason: '' });
+      setSuccess(`${quickLeaveModal.type === 'sick' ? 'Sick' : 'Casual'} leave added for ${quickLeaveModal.employeeName}`);
+      setQuickLeaveModal({ open: false, employeeId: null, employeeName: '', type: 'sick', startDate: '', endDate: '', reason: '' });
       setTimeout(() => setSuccess(''), 3000);
       fetchLeaveApplications(); // refresh leave list
       fetchAnalytics(); // refresh stats
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to add sick leave');
+      alert(err.response?.data?.error || `Failed to add ${quickLeaveModal.type} leave`);
     }
   };
 
-  const handleSickLeaveDateChange = (field, value) => {
+  const handleQuickLeaveDateChange = (field, value) => {
     // [MODIFIED] Removed blocking alert for weekends to allow calendar navigation
-    setSickLeaveModal(prev => ({ ...prev, [field]: value }));
+    setQuickLeaveModal(prev => ({ ...prev, [field]: value }));
   };
 
   const renderEditDateModal = () => {
@@ -1775,28 +1833,33 @@ function HrDashboard() {
     );
   };
 
-  const renderSickLeaveModal = () => {
-    if (!sickLeaveModal.open) return null;
+  const renderQuickLeaveModal = () => {
+    if (!quickLeaveModal.open) return null;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
         <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-          <h3 className="text-lg font-bold mb-4">Add Sick Leave for {sickLeaveModal.employeeName}</h3>
-          <form onSubmit={handleSickLeaveSubmit} className="space-y-4">
+          <h3 className="text-lg font-bold mb-4">Add {quickLeaveModal.type === 'sick' ? 'Sick' : 'Casual'} Leave for {quickLeaveModal.employeeName}</h3>
+          <form onSubmit={handleQuickLeaveSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Start Date</label>
-              <input type="date" required value={sickLeaveModal.startDate} onChange={e => handleSickLeaveDateChange('startDate', e.target.value)} className="w-full border rounded px-3 py-2" />
+              <input type="date" required value={quickLeaveModal.startDate} onChange={e => handleQuickLeaveDateChange('startDate', e.target.value)} className="w-full border rounded px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">End Date</label>
-              <input type="date" required min={sickLeaveModal.startDate} value={sickLeaveModal.endDate} onChange={e => handleSickLeaveDateChange('endDate', e.target.value)} className="w-full border rounded px-3 py-2" />
+              <input type="date" required min={quickLeaveModal.startDate} value={quickLeaveModal.endDate} onChange={e => handleQuickLeaveDateChange('endDate', e.target.value)} className="w-full border rounded px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Reason</label>
-              <textarea required value={sickLeaveModal.reason} onChange={e => setSickLeaveModal(prev => ({ ...prev, reason: e.target.value }))} className="w-full border rounded px-3 py-2" rows="3"></textarea>
+              <textarea required value={quickLeaveModal.reason} onChange={e => setQuickLeaveModal(prev => ({ ...prev, reason: e.target.value }))} className="w-full border rounded px-3 py-2" rows="3"></textarea>
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setSickLeaveModal({ ...sickLeaveModal, open: false })} className="px-4 py-2 border rounded hover:bg-gray-100">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Add Leave</button>
+              <button type="button" onClick={() => setQuickLeaveModal({ ...quickLeaveModal, open: false })} className="px-4 py-2 border rounded hover:bg-gray-100">Cancel</button>
+              <button
+                type="submit"
+                className={`px-4 py-2 text-white rounded font-medium ${quickLeaveModal.type === 'sick' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+              >
+                Add {quickLeaveModal.type === 'sick' ? 'Sick' : 'Casual'} Leave
+              </button>
             </div>
           </form>
         </div>
@@ -2121,7 +2184,7 @@ function HrDashboard() {
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.WORK_HOURS && renderWorkHours()}
           {activeTab === TABS.SETTINGS && renderSettings()}
-          {renderSickLeaveModal()}
+          {renderQuickLeaveModal()}
           {renderEditDateModal()}
         </main>
       </div>

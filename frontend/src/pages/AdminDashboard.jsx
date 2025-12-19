@@ -167,6 +167,14 @@ function AdminDashboard() {
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [checkoutMarked, setCheckoutMarked] = useState(false);
 
+  // Admin Leave Broadcast State
+  const [showAdminLeaveModal, setShowAdminLeaveModal] = useState(false);
+  const [adminLeaveForm, setAdminLeaveForm] = useState({
+    startDate: '',
+    endDate: '',
+    reason: ''
+  });
+
   const handleSettingChange = (category, field, value) => {
     setSettings(prev => ({
       ...prev,
@@ -458,6 +466,39 @@ function AdminDashboard() {
       });
     } catch (err) {
       console.error('Error fetching leave statistics:', err);
+    }
+  };
+
+  const handleCreateAdminLeave = async () => {
+    try {
+      if (!adminLeaveForm.startDate || !adminLeaveForm.endDate) {
+        alert('Please select start and end dates');
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API_BASE_URL}/admin/leaves/create-broadcast`,
+        adminLeaveForm,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setTabSuccess({ [TABS.CALENDAR]: 'Admin leave broadcasted successfully!' });
+      setShowAdminLeaveModal(false);
+      setAdminLeaveForm({ startDate: '', endDate: '', reason: '' });
+
+      // Refresh calendar
+      fetchCalendarSummary(new Date());
+
+      setTimeout(() => setTabSuccess(prev => {
+        const n = { ...prev };
+        delete n[TABS.CALENDAR];
+        return n;
+      }), 3000);
+
+    } catch (err) {
+      console.error('Failed to create admin leave:', err);
+      setTabErrors({ [TABS.CALENDAR]: err.response?.data?.error || 'Failed to create leave' });
     }
   };
 
@@ -2122,6 +2163,12 @@ function AdminDashboard() {
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <h2 className="text-2xl font-bold text-gray-800">My Attendance & Holidays</h2>
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowAdminLeaveModal(true)}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-bold flex items-center gap-2"
+          >
+            <span>+ Admin Leave</span>
+          </button>
           {!attendanceMarked ? (
             <button onClick={handleMarkAttendance} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold">Check In</button>
           ) : (
@@ -2147,6 +2194,66 @@ function AdminDashboard() {
           onMonthChange={fetchCalendarSummary}
         />
       </div>
+
+      {/* Admin Leave Modal */}
+      {showAdminLeaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Add Admin Leave (Broadcast)</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                This will create an approved leave for you and notify ALL active employees.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                    value={adminLeaveForm.startDate}
+                    onChange={(e) => setAdminLeaveForm({ ...adminLeaveForm, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">End Date</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                    value={adminLeaveForm.endDate}
+                    onChange={(e) => setAdminLeaveForm({ ...adminLeaveForm, endDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Reason</label>
+                  <textarea
+                    className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                    rows="3"
+                    value={adminLeaveForm.reason}
+                    onChange={(e) => setAdminLeaveForm({ ...adminLeaveForm, reason: e.target.value })}
+                    placeholder="Brief reason for leave..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowAdminLeaveModal(false)}
+                  className="px-4 py-2 border text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateAdminLeave}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  Broadcast Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
