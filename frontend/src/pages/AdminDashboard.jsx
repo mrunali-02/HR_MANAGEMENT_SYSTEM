@@ -1737,7 +1737,7 @@ function AdminDashboard() {
         {/* Leave Statistics Card */}
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">
-            Total Number of Leaves for {leaveStatistics.year}
+            Total Approved Leave Days for {leaveStatistics.year}
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -1751,6 +1751,10 @@ function AdminDashboard() {
             <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
               <div className="text-sm text-orange-600 font-medium">Sick Leave</div>
               <div className="text-2xl font-bold text-orange-800 mt-1">{leaveStatistics.sickLeave}</div>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+              <div className="text-sm text-purple-600 font-medium">Work From Home</div>
+              <div className="text-2xl font-bold text-purple-800 mt-1">{leaveStatistics.wfhLeave || 0}</div>
             </div>
           </div>
         </div>

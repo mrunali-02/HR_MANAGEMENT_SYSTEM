@@ -1,0 +1,21 @@
+Checking stats for year: 2025
+Distinct Types found: ["casual","work_from_home","sick","paid"]
+
+--- PAID (Planned) Leaves ---
+[15] Status: approved | 2026-01-06 to 2026-01-08 (3 days)
+
+Query Result (Approved Only):
+[
+  {
+    "type": "casual",
+    "count": "2"
+  },
+  {
+    "type": "work_from_home",
+    "count": "2"
+  },
+  {
+    "type": "sick",
+    "count": "1"
+  }
+]

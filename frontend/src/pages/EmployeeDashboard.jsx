@@ -445,7 +445,7 @@ function EmployeeDashboard() {
     const validateDate = (dateStr) => {
       const d = new Date(dateStr);
       const day = d.getDay();
-      if (day === 0 || day === 6) return 'Weekends (Saturday/Sunday) cannot be selected for leave.';
+      if (day === 0) return 'Sundays cannot be selected for leave.';
 
       const isHoliday = holidays.some(h => {
         let hDate = h.date;

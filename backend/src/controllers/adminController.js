@@ -409,9 +409,10 @@ export async function getLeaveStatistics(req, res) {
     const [stats] = await db.execute(`
       SELECT 
         type,
-      COUNT(*) as count
+        SUM(DATEDIFF(end_date, start_date) + 1) as count
       FROM leave_requests
-      WHERE YEAR(start_date) = ? OR YEAR(end_date) = ?
+      WHERE (YEAR(start_date) = ? OR YEAR(end_date) = ?)
+        AND status = 'approved'
       GROUP BY type
       `, [currentYear, currentYear]);
 
@@ -420,12 +421,13 @@ export async function getLeaveStatistics(req, res) {
       paid: 0,
       casual: 0,
       sick: 0,
-      emergency: 0
+      emergency: 0,
+      work_from_home: 0
     };
 
     stats.forEach(stat => {
       if (leaveCounts.hasOwnProperty(stat.type)) {
-        leaveCounts[stat.type] = stat.count;
+        leaveCounts[stat.type] = Number(stat.count) || 0;
       }
     });
 
@@ -434,7 +436,8 @@ export async function getLeaveStatistics(req, res) {
       plannedLeave: leaveCounts.paid,
       casualLeave: leaveCounts.casual,
       sickLeave: leaveCounts.sick,
-      emergencyLeave: leaveCounts.emergency
+      emergencyLeave: leaveCounts.emergency,
+      wfhLeave: leaveCounts.work_from_home
     });
   } catch (error) {
     console.error('Leave statistics error:', error);
