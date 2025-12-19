@@ -1009,22 +1009,19 @@ function AdminDashboard() {
   const inactiveEmployeesCount = summary.inactiveEmployees || users.filter((u) => (u.status || 'active') === 'inactive').length;
   const leavesTodayCount = summary.leavesToday || 0;
 
-  const generateEmployeeId = (role) => {
-    const prefixMap = { employee: 'emp', manager: 'man', hr: 'hr' };
-    const prefix = prefixMap[role] || 'emp';
-    const regex = new RegExp(`^${prefix}(\\d+)$`, 'i');
-
+  const generateEmployeeId = () => {
     const maxNumber = users.reduce((max, u) => {
       if (!u.employee_id) return max;
-      const match = u.employee_id.match(regex);
-      if (!match) return max;
-      const parsed = parseInt(match[1], 10);
+      // Extract numeric part from existing IDs (e.g. "emp001" -> 1, "005" -> 5)
+      const numStr = u.employee_id.replace(/\D/g, '');
+      if (!numStr) return max;
+      const parsed = parseInt(numStr, 10);
       if (Number.isNaN(parsed)) return max;
       return Math.max(max, parsed);
     }, 0);
 
     const nextNumber = maxNumber + 1;
-    return `${prefix}${String(nextNumber).padStart(3, '0')}`;
+    return String(nextNumber).padStart(3, '0');
   };
 
   const renderDashboard = () => (
@@ -1256,6 +1253,11 @@ function AdminDashboard() {
               } else {
                 setSelectedEmployee(null);
                 resetForm();
+
+                // Pre-fill new Employee ID
+                const newId = generateEmployeeId();
+                setFormData(prev => ({ ...prev, employee_id: newId }));
+
                 setShowAddForm(true);
               }
             }}
@@ -1324,9 +1326,10 @@ function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                  <label className="block text-sm font-medium text-gray-700">Last Name <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
                     name="last_name"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.last_name}
@@ -1336,9 +1339,10 @@ function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">First Name</label>
+                  <label className="block text-sm font-medium text-gray-700">First Name <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
                     name="first_name"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.first_name}
@@ -1361,7 +1365,7 @@ function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <label className="block text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></label>
                   <input
                     type="email"
                     name="email"
@@ -1374,7 +1378,7 @@ function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                  <label className="block text-sm font-medium text-gray-700">Password <span className="text-red-500">*</span></label>
                   <input
                     type="password"
                     name="password"
@@ -1387,7 +1391,7 @@ function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <label className="block text-sm font-medium text-gray-700">Role <span className="text-red-500">*</span></label>
                   <select
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.role}
@@ -1395,7 +1399,7 @@ function AdminDashboard() {
                       setFormData((prev) => ({
                         ...prev,
                         role: e.target.value,
-                        employee_id: selectedEmployee ? prev.employee_id : generateEmployeeId(e.target.value),
+                        // ID should remain the same even if role changes
                       }))
                     }
                   >
@@ -1405,18 +1409,20 @@ function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Department</label>
+                  <label className="block text-sm font-medium text-gray-700">Department <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <label className="block text-sm font-medium text-gray-700">Phone <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
                     pattern="[0-9]{10}"
                     maxLength={10}
                     title="Enter 10 digit phone number"
@@ -1440,9 +1446,10 @@ function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                  <label className="block text-sm font-medium text-gray-700">Date of Birth <span className="text-red-500">*</span></label>
                   <input
                     type="date"
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.dob}
                     max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
@@ -1452,8 +1459,9 @@ function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Gender</label>
+                  <label className="block text-sm font-medium text-gray-700">Gender <span className="text-red-500">*</span></label>
                   <select
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.gender}
                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
@@ -1466,8 +1474,9 @@ function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Blood Group</label>
+                  <label className="block text-sm font-medium text-gray-700">Blood Group <span className="text-red-500">*</span></label>
                   <select
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.blood_group}
                     onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
@@ -1484,30 +1493,35 @@ function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Nationality</label>
+                  <label className="block text-sm font-medium text-gray-700">Nationality <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.nationality}
                     onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Emergency Contact</label>
+                  <label className="block text-sm font-medium text-gray-700">Emergency Contact <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    required
+                    pattern="[0-9]{10}"
+                    title="Enter 10 digit phone number"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.emergency_contact}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '');
                       setFormData({ ...formData, emergency_contact: value });
                     }}
-                    maxLength={15}
+                    maxLength={10}
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <label className="block text-sm font-medium text-gray-700">Address <span className="text-red-500">*</span></label>
                   <textarea
+                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     rows={2}
                     value={formData.address}

@@ -24,7 +24,7 @@ export async function login(req, res) {
     console.log(`Login attempt for email: ${email}`);
 
     const [rows] = await db.execute(
-      'SELECT id, password_hash, email, role, name FROM employees WHERE email = ?',
+      'SELECT id, password_hash, email, role, name, status FROM employees WHERE email = ?',
       [email]
     );
 
@@ -39,8 +39,14 @@ export async function login(req, res) {
     }
 
     const user = rows[0];
-    console.log(`User found: ${user.email}, role: ${user.role}`);
-    
+
+    if (user.status === 'inactive') {
+      console.log(`Login blocked for inactive user: ${email}`);
+      return res.status(403).json({ error: 'Your account is inactive. Please contact admin.' });
+    }
+
+    console.log(`User found: ${user.email}, role: ${user.role}, status: ${user.status}`);
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       console.log(`Password mismatch for user: ${email}`);
@@ -51,7 +57,7 @@ export async function login(req, res) {
       ).catch(err => console.error('Failed to log failed login:', err));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
+
     console.log(`Login successful for user: ${email}`);
 
     // create token (uuid) and store in DB with expiry computed by MySQL (UTC)
@@ -65,7 +71,7 @@ export async function login(req, res) {
 
     // Log successful login
     const { logAudit } = await import('../utils/audit.js');
-    await logAudit(user.id, 'login_successful', { email: user.email }).catch(() => {});
+    await logAudit(user.id, 'login_successful', { email: user.email }).catch(() => { });
 
     return res.json({
       token,
@@ -78,7 +84,7 @@ export async function login(req, res) {
     });
   } catch (error) {
     console.error('Login error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Login failed',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
