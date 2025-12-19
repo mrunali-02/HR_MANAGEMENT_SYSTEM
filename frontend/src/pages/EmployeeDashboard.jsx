@@ -1134,7 +1134,9 @@ function EmployeeDashboard() {
                       )}
                       {leaveHistory.map((l) => (
                         <tr key={l.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">{l.type}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">
+                            {l.type === 'paid' ? 'Planned' : l.type.replace(/_/g, ' ')}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(l.start_date)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(l.end_date)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-semibold">

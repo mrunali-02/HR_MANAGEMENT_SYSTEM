@@ -165,7 +165,7 @@ export async function adminLogin(req, res) {
 ====================== */
 export async function addEmployee(req, res) {
   try {
-    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
+    const { email, password, name, first_name, middle_name, last_name, role, employee_id, department, designation, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -191,10 +191,10 @@ export async function addEmployee(req, res) {
 
     const [result] = await db.execute(
       `INSERT INTO employees (
-        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        email, password_hash, name, first_name, middle_name, last_name, role, employee_id, department, designation, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, phone || null, joined_on || null, address || null, status || 'active',
+        email, hashedPassword, fullName || null, first_name || null, middle_name || null, last_name || null, role, employee_id || null, department || null, designation || null, phone || null, joined_on || null, address || null, status || 'active',
         dob || null, gender || null, blood_group || null, nationality || null, emergency_contact || null
       ]
     );
@@ -230,6 +230,7 @@ export async function getUsers(req, res) {
         e.status, 
         e.role, 
         e.department, 
+        e.designation,
         e.phone, 
         e.joined_on, 
         e.address, 
@@ -326,7 +327,7 @@ export async function assignManager(req, res) {
 export async function updateEmployee(req, res) {
   try {
     const { id } = req.params;
-    const { name, first_name, middle_name, last_name, role, department, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
+    const { name, first_name, middle_name, last_name, role, department, designation, phone, joined_on, address, status, dob, gender, blood_group, nationality, emergency_contact } = req.body;
     console.log('Update Employee Request:', { id, body: req.body });
 
     if (parseInt(id) === req.user.id && role && role !== req.user.role) {
@@ -345,10 +346,10 @@ export async function updateEmployee(req, res) {
 
     const [updateResult] = await db.execute(
       `UPDATE employees SET
-        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, phone=?, joined_on=?, address=?, status=?, dob=?, gender=?, blood_group=?, nationality=?, emergency_contact=?
+        name=?, first_name=?, middle_name=?, last_name=?, role=?, department=?, designation=?, phone=?, joined_on=?, address=?, status=?, dob=?, gender=?, blood_group=?, nationality=?, emergency_contact=?
        WHERE id=?`,
       [
-        fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, phone || null, joined_on || null, address || null, status || 'active',
+        fullName || null, first_name || null, middle_name || null, last_name || null, role || null, department || null, designation || null, phone || null, joined_on || null, address || null, status || 'active',
         dob || null, gender || null, blood_group || null, nationality || null, emergency_contact || null,
         id
       ]

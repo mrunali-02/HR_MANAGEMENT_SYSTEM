@@ -64,6 +64,17 @@ async function migrate() {
         });
       }
 
+      // Migration update: Add designation column
+      await connection.execute(`
+        SELECT count(*) FROM information_schema.COLUMNS 
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'designation')
+      `).then(async ([rows]) => {
+        if (rows[0]['count(*)'] === 0) {
+          await connection.execute("ALTER TABLE employees ADD COLUMN designation VARCHAR(100)");
+          console.log('✓ Added designation column to employees');
+        }
+      });
+
       // Drop contact_number if exists (cleanup)
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 

@@ -95,6 +95,7 @@ function AdminDashboard() {
     password: '',
     role: 'employee',
     department: '',
+    designation: '',
     phone: '',
     joined_on: '',
     address: '',
@@ -1234,7 +1235,8 @@ function AdminDashboard() {
 
   const renderEmployeeList = () => {
     const filteredUsers = users.filter((u) => {
-      const nameMatch = searchFilters.name ? (u.name || '').toLowerCase().includes(searchFilters.name.toLowerCase()) : true;
+      const fullName = [u.first_name, u.middle_name, u.last_name].filter(Boolean).join(' ') || u.name || '';
+      const nameMatch = searchFilters.name ? fullName.toLowerCase().includes(searchFilters.name.toLowerCase()) : true;
       const idMatch = searchFilters.employeeId ? (u.employee_id || '').toLowerCase().includes(searchFilters.employeeId.toLowerCase()) : true;
       const emailMatch = searchFilters.email ? (u.email || '').toLowerCase().includes(searchFilters.email.toLowerCase()) : true;
       const roleMatch = searchFilters.role ? (u.role || '').toLowerCase().includes(searchFilters.role.toLowerCase()) : true;
@@ -1318,10 +1320,9 @@ function AdminDashboard() {
                   <input
                     type="text"
                     name="employee_id"
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.employee_id}
-                    readOnly
-                    disabled
+                    onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                   />
                 </div>
 
@@ -1419,6 +1420,16 @@ function AdminDashboard() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700">Designation</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formData.designation}
+                    onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                    placeholder="e.g. Senior Developer"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700">Phone <span className="text-red-500">*</span></label>
                   <input
                     type="text"
@@ -1474,9 +1485,8 @@ function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Blood Group <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700">Blood Group</label>
                   <select
-                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.blood_group}
                     onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
@@ -1570,7 +1580,7 @@ function AdminDashboard() {
                     Email
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Department
+                    Designation
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Phone
@@ -1590,7 +1600,7 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((u) => (
+                {filteredUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{u.id}</td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
@@ -1604,7 +1614,7 @@ function AdminDashboard() {
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{u.email}</td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {u.department || '-'}
+                      {u.designation || '-'}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                       {u.phone || '-'}
@@ -1633,7 +1643,7 @@ function AdminDashboard() {
                     </td>
                   </tr>
                 ))}
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <tr>
                     <td
                       className="px-4 py-4 text-center text-sm text-gray-500"
