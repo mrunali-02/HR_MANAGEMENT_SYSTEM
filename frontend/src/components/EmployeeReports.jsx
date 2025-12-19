@@ -102,7 +102,7 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             typeCounts[t] = (typeCounts[t] || 0) + 1;
         });
         const pieData = Object.keys(typeCounts).map((key, index) => ({
-            name: key,
+            name: key === 'paid' ? 'Planned' : key.replace(/_/g, ' '),
             value: typeCounts[key],
             color: COLORS[index % COLORS.length]
         }));

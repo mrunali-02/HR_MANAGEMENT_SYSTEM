@@ -274,7 +274,7 @@ const CalendarView = ({ attendance = [], holidays = [], leaves = [], onDateClick
                                         <ul className="list-disc text-sm text-gray-600">
                                             {selectedDayDetails.leave.map((l, i) => (
                                                 <li key={i}>
-                                                    <span className="font-medium">{l.name}</span> <span className="text-xs text-gray-400">({l.type})</span>
+                                                    <span className="font-medium">{l.name}</span> <span className="text-xs text-gray-400">({l.type === 'paid' ? 'Planned' : l.type})</span>
                                                 </li>
                                             ))}
                                         </ul>
