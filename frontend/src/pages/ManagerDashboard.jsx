@@ -11,7 +11,7 @@ import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+  import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:5000/api';
 
 const TABS = {
   DASHBOARD: 'dashboard',

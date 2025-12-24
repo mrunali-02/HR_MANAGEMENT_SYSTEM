@@ -8,7 +8,7 @@ import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
 import { formatDate } from '../utils/dateUtils';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:3000/api';
 
 function EmployeeDashboard() {
   const { id } = useParams();
