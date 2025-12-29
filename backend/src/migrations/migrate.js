@@ -27,6 +27,11 @@ async function migrate() {
     joined_on DATE,
     photo_url VARCHAR(500),
     address TEXT,
+    dob DATE,
+    gender VARCHAR(20),
+    blood_group VARCHAR(10),
+    nationality VARCHAR(100),
+    emergency_contact VARCHAR(255),
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_email (email),
@@ -74,6 +79,29 @@ async function migrate() {
           console.log('✓ Added designation column to employees');
         }
       });
+
+      // Migration update: Add profile detail columns
+      const profileCols = [
+        { name: 'dob', type: 'DATE' },
+        { name: 'gender', type: 'VARCHAR(20)' },
+        { name: 'blood_group', type: 'VARCHAR(10)' },
+        { name: 'nationality', type: 'VARCHAR(100)' },
+        { name: 'emergency_contact', type: 'VARCHAR(255)' }
+      ];
+
+      for (const col of profileCols) {
+        await connection.execute(`
+           SELECT count(*) FROM information_schema.COLUMNS 
+           WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col.name}')
+         `).then(async ([rows]) => {
+          if (rows[0]['count(*)'] === 0) {
+            await connection.execute(`ALTER TABLE employees ADD COLUMN ${col.name} ${col.type}`);
+            console.log(`✓ Added ${col.name} column to employees`);
+          }
+        });
+      }
+
+      // Migration update: Add designation column
 
       // Drop contact_number if exists (cleanup)
       await connection.execute(`
@@ -297,6 +325,7 @@ async function migrate() {
         total_days INT NOT NULL DEFAULT 05,
         used_days INT NOT NULL DEFAULT 0,
         remaining_days INT NOT NULL DEFAULT 0,
+        carried_forward INT NOT NULL DEFAULT 0,
         year INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -319,6 +348,21 @@ async function migrate() {
 
 
     console.log('✓ Created leave_balances table');
+
+    // Migration update: Add carried_forward column to leave_balances if not exists
+    try {
+      await connection.execute(`
+        SELECT count(*) FROM information_schema.COLUMNS 
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'leave_balances' AND COLUMN_NAME = 'carried_forward')
+      `).then(async ([rows]) => {
+        if (rows[0]['count(*)'] === 0) {
+          await connection.execute("ALTER TABLE leave_balances ADD COLUMN carried_forward INT NOT NULL DEFAULT 0");
+          console.log('✓ Added carried_forward column to leave_balances');
+        }
+      });
+    } catch (err) {
+      console.log('Note: leave_balances carried_forward migration check failed or already exists', err.message);
+    }
 
     // Create work_hours table
     await connection.execute(`
