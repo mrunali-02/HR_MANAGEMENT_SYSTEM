@@ -19,7 +19,7 @@ import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
 import LeaveCarryForward from '../components/LeaveCarryForward';
 import { formatDate } from '../utils/dateUtils';
-import { Save } from 'lucide-react';
+import { Save, Menu, X, Bell, LogOut, LayoutDashboard, Users, FileText, Calendar as CalendarIcon, ClipboardList, Clock, BarChart2, Settings as SettingsIcon, ChevronRight } from 'lucide-react';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -52,6 +52,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -1481,9 +1482,10 @@ function AdminDashboard() {
                     maxLength={10}
                     title="Enter 10 digit phone number"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter 10-digit phone"
                     value={formData.phone}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                       setFormData({ ...formData, phone: value });
                     }}
                   />
@@ -1563,9 +1565,10 @@ function AdminDashboard() {
                     pattern="[0-9]{10}"
                     title="Enter 10 digit phone number"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter 10-digit number"
                     value={formData.emergency_contact}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                       setFormData({ ...formData, emergency_contact: value });
                     }}
                     maxLength={10}
@@ -2178,13 +2181,13 @@ function AdminDashboard() {
           {!attendanceMarked ? (
             <button onClick={handleMarkAttendance} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-bold">Check In</button>
           ) : (
-            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">✓ Checked In</span>
+            <span className="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">Checked In</span>
           )}
           {attendanceMarked && !checkoutMarked && (
             <button onClick={handleCheckout} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-bold">Check Out</button>
           )}
           {checkoutMarked && (
-            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">✓ Checked Out</span>
+            <span className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">Checked Out</span>
           )}
         </div>
       </div>
@@ -2436,129 +2439,106 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[color:var(--bg-main)] flex">
+    <div className="min-h-screen bg-[color:var(--bg-main)] flex overflow-hidden">
+      {/* Sidebar Overlay (Mobile) */}
+      <div
+        className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
-        <div className="h-16 flex items-center justify-center border-b border-[#3f4a59]">
-          <span className="text-lg font-bold tracking-wide text-[#f6f3ee]">HRMS Admin</span>
+      <aside className={`sidebar-drawer w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl lg:static lg:left-0 ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-[#3f4a59]">
+          <span className="text-lg font-bold tracking-wide">HRMS Admin</span>
+          <button className="lg:hidden text-[#f6f3ee]" onClick={() => setIsSidebarOpen(false)}>
+            <X size={24} />
+          </button>
         </div>
-        <nav className="flex-1 py-4 space-y-1 px-3">
-          <button
-            onClick={() => setActiveTab(TABS.DASHBOARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.DASHBOARD
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.EMPLOYEES)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.EMPLOYEES
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Employee List
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.LEAVE_APPLICATIONS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.LEAVE_APPLICATIONS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Leave Applications
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.LEAVE_CARRY_FORWARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.LEAVE_CARRY_FORWARD
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Leave Carry Forward
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.CALENDAR)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.CALENDAR
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Calendar & Holidays
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.AUDIT_LOGS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.AUDIT_LOGS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Audit Logs
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.WORK_HOURS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.WORK_HOURS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Work Hours
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.REPORTS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.REPORTS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Reports
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.SETTINGS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.SETTINGS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Settings
-          </button>
+        <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
+          {[
+            { id: TABS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
+            { id: TABS.EMPLOYEES, label: 'Employees', icon: Users },
+            { id: TABS.LEAVE_APPLICATIONS, label: 'Leave Requests', icon: FileText },
+            { id: TABS.LEAVE_CARRY_FORWARD, label: 'Carry Forward', icon: ChevronRight },
+            { id: TABS.CALENDAR, label: 'Calendar', icon: CalendarIcon },
+            { id: TABS.AUDIT_LOGS, label: 'Audit Logs', icon: ClipboardList },
+            { id: TABS.WORK_HOURS, label: 'Work Hours', icon: Clock },
+            { id: TABS.REPORTS, label: 'Reports', icon: BarChart2 },
+            { id: TABS.SETTINGS, label: 'Settings', icon: SettingsIcon },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition rounded-md ${activeTab === item.id
+                ? 'bg-[#3f4a59] text-white shadow-sm'
+                : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
+                }`}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
         </nav>
         <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
-            className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
+            className="w-full inline-flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
           >
+            <LogOut size={16} />
             Logout
           </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top bar */}
-        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
-          <div>
-            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-primary">
-              {activeTab === TABS.DASHBOARD && 'Dashboard'}
-              {activeTab === TABS.EMPLOYEES && 'Employee Management'}
-              {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
-              {activeTab === TABS.LEAVE_CARRY_FORWARD && 'Leave Carry Forward'}
-              {activeTab === TABS.CALENDAR && 'Calendar & Holidays'}
-              {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
-              {activeTab === TABS.REPORTS && 'Reports'}
-              {activeTab === TABS.SETTINGS && 'Settings'}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Signed in as {user?.name || user?.email} ({user?.role})
-            </p>
+        <header className="h-16 flex-shrink-0 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden text-gray-600 hover:text-gray-900"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden sm:block">
+              <h1 className="text-xl font-bold text-gray-900">Vivekanand Technologies</h1>
+            </div>
+            <div className="sm:hidden">
+              <h1 className="text-lg font-bold text-gray-900">Admin</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-semibold text-gray-900">{user?.name || 'Administrator'}</p>
+              <p className="text-xs text-gray-500 uppercase">{activeTab}</p>
+            </div>
+            <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border-2 border-white shadow-sm">
+              {user?.name?.charAt(0) || 'A'}
+            </div>
           </div>
         </header>
 
         {/* Content area */}
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto bg-[color:var(--bg-main)]">
+          {(error || success) && (
+            <div className="max-w-7xl mx-auto mb-6">
+              {error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-sm">
+                  <p className="text-sm text-red-700 font-medium">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded shadow-sm">
+                  <p className="text-sm text-emerald-700 font-medium">{success}</p>
+                </div>
+              )}
+            </div>
+          )}
           {activeTab === TABS.DASHBOARD && renderDashboard()}
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}

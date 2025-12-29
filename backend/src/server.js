@@ -16,14 +16,15 @@ dotenv.config();
 const app = express();
 
 // Ensure this matches the port in your Airtel Router Rule #2
-const PORT = process.env.PORT || 5000; 
+const PORT = process.env.PORT || 5000;
 
-// Middleware - Updated CORS to allow your Static IP
+// Middleware - Updated CORS to allow local development and local network
 app.use(cors({
   origin: [
-    'http://122.179.153.216:8080', // Your public frontend address
     'http://localhost:8080',       // Local development
-    'http://192.168.1.12:8080'     // Local network address
+    'http://127.0.0.1:8080',       // Local development (IPv4)
+    /\.local:8080$/,               // Local network domains
+    /^http:\/\/192\.168\.\d+\.\d+:8080$/ // Typical home network range
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
@@ -61,8 +62,8 @@ app.use((req, res) => {
 // Start Server listening on all network interfaces
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on all interfaces at port ${PORT}`);
-  console.log(`External Health check: http://122.179.153.216:${PORT}/health`);
-  
+  console.log(`Health check: http://localhost:${PORT}/health`);
+
   // Initialize Cron Jobs
   initAttendanceCron();
 });

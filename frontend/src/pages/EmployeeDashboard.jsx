@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,9 +7,9 @@ import './EmployeeDashboard.css';
 import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
 import { formatDate } from '../utils/dateUtils';
+import { Menu, X, Bell, LogOut, LayoutDashboard, Calendar as CalendarIcon, FileText, Settings as SettingsIcon, Activity } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:3000/api';
-//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 function EmployeeDashboard() {
   const { id } = useParams();
@@ -23,6 +23,7 @@ function EmployeeDashboard() {
   const [success, setSuccess] = useState('');
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [checkoutMarked, setCheckoutMarked] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Attendance state
   const [todayAttendance, setTodayAttendance] = useState(null);
@@ -518,7 +519,16 @@ function EmployeeDashboard() {
 
 
   const handleSettingsChange = (field, value) => {
-    setSettingsForm((prev) => ({ ...prev, [field]: value }));
+    if ((field === 'phone' || field === 'emergency_contact')) {
+      // Remove any non-numeric characters
+      const numericValue = value.replace(/\D/g, '');
+      // Limit to 10 digits
+      if (numericValue.length <= 10) {
+        setSettingsForm((prev) => ({ ...prev, [field]: numericValue }));
+      }
+    } else {
+      setSettingsForm((prev) => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleSaveSettings = async (e) => {
@@ -613,100 +623,115 @@ function EmployeeDashboard() {
   // --- Render Sections (Updated with New CSS Classes) ---
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
-        <div className="h-16 flex items-center justify-center border-b border-slate-800">
-          <span className="text-lg font-semibold tracking-wide">Employee Panel</span>
+    <div className="min-h-screen bg-[color:var(--bg-main)] flex overflow-hidden">
+      {/* Sidebar Overlay (Mobile) */}
+      <div
+        className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Sidebar / Sidebar Drawer */}
+      <aside className={`sidebar-drawer w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl lg:static lg:left-0 ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-[#3f4a59]">
+          <span className="text-lg font-bold tracking-wide">HRMS</span>
+          <button className="lg:hidden text-[#f6f3ee]" onClick={() => setIsSidebarOpen(false)}>
+            <X size={24} />
+          </button>
         </div>
-
-        <nav className="flex-1 py-4 space-y-1">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'dashboard'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'attendance'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Attendance
-          </button>
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'calendar'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Calendar
-          </button>
-          <button
-            onClick={() => setActiveTab('leaves')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'leaves'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Leaves
-          </button>
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'reports'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Reports
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === 'settings'
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Settings
-          </button>
+        <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { id: 'attendance', label: 'Attendance', icon: CalendarIcon },
+            { id: 'leaves', label: 'Leaves', icon: FileText },
+            { id: 'reports', label: 'Reports', icon: Activity },
+            { id: 'settings', label: 'Settings', icon: SettingsIcon },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition rounded-md ${activeTab === item.id
+                ? 'bg-[#3f4a59] text-white shadow-sm'
+                : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
+                }`}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
         </nav>
-
         <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
-            className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
+            className="w-full inline-flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
           >
+            <LogOut size={16} />
             Logout
           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
+      {/* Main Content Scrollable Area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top Header */}
-        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
-          <div>
-            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-secondary">
-              {activeTab === 'dashboard' ? 'Overview' :
-                activeTab === 'attendance' ? 'Attendance History' :
-                  activeTab === 'calendar' ? 'Calendar' :
-                    activeTab === 'leaves' ? 'Leave Management' : 'My Profile'}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Welcome back, {profile?.user?.name || 'Employee'}
-            </p>
+        <header className="h-16 flex-shrink-0 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden text-gray-600 hover:text-gray-900"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden sm:block">
+              <h1 className="text-xl font-bold text-gray-900">Vivekanand Technologies</h1>
+            </div>
+            <div className="sm:hidden">
+              <h1 className="text-lg font-bold text-gray-900">HRMS</h1>
+            </div>
           </div>
-          <div className="text-sm font-medium text-gray-600">
-            {profile?.user?.email}
+
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-semibold text-gray-900">{profile?.user?.name || 'Loading...'}</p>
+              <p className="text-xs text-gray-500 uppercase">{activeTab}</p>
+            </div>
+            <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border-2 border-white shadow-sm">
+              {profile?.user?.name?.charAt(0) || 'U'}
+            </div>
           </div>
         </header>
+
+        {/* Global Messages (Error/Success) */}
+        {(error || success) && (
+          <div className="px-4 lg:px-8 pt-4">
+            {error && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-sm">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <X className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {success && (
+              <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded shadow-sm">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <X className="h-5 w-5 text-emerald-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-emerald-700">{success}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Scrollable Content */}
         <main className="flex-1 p-6 overflow-y-auto">
@@ -781,7 +806,7 @@ function EmployeeDashboard() {
                         : 'bg-[color:var(--accent-primary)] text-white hover:opacity-90 shadow-md'
                         }`}
                     >
-                      {attendanceMarked || todayAttendance?.status === 'present' ? '✓ Checked In' : 'Check In Now'}
+                      {attendanceMarked || todayAttendance?.status === 'present' ? 'Checked In' : 'Check In Now'}
                     </button>
 
                     <button
@@ -792,7 +817,7 @@ function EmployeeDashboard() {
                         : 'bg-[color:var(--status-success)] text-white hover:opacity-90 shadow-md'
                         }`}
                     >
-                      {checkoutMarked ? '✓ Checked Out' : 'Check Out'}
+                      {checkoutMarked ? 'Checked Out' : 'Check Out'}
                     </button>
                   </div>
                 </div>
@@ -889,7 +914,7 @@ function EmployeeDashboard() {
                       disabled
                       className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
                     >
-                      ✓ Checked In
+                      Checked In
                     </button>
                   )}
                   {attendanceMarked && !checkoutMarked && todayAttendance?.check_in && (
@@ -905,7 +930,7 @@ function EmployeeDashboard() {
                       disabled
                       className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded-lg shadow-md cursor-not-allowed opacity-90 text-sm font-bold"
                     >
-                      ✓ Checked Out
+                      Checked Out
                     </button>
                   )}
                 </div>
@@ -1105,7 +1130,7 @@ function EmployeeDashboard() {
               {/* Leave History Table */}
               <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
                 <h3 className="text-lg font-semibold mb-4 text-gray-900">Request History</h3>
-                <div className="overflow-x-auto">
+                <div className="responsive-table-container">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-[#f0f4f8]">
                       <tr>
@@ -1229,8 +1254,9 @@ function EmployeeDashboard() {
                           type="text"
                           value={settingsForm.phone}
                           onChange={(e) => handleSettingsChange('phone', e.target.value)}
+                          maxLength="10"
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
-                          placeholder="Enter phone number"
+                          placeholder="Enter 10-digit phone number"
                         />
                       </div>
                       <div>
@@ -1239,8 +1265,9 @@ function EmployeeDashboard() {
                           type="text"
                           value={settingsForm.emergency_contact}
                           onChange={(e) => handleSettingsChange('emergency_contact', e.target.value)}
+                          maxLength="10"
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
-                          placeholder="Emergency contact info"
+                          placeholder="Enter 10-digit emergency contact"
                         />
                       </div>
                     </div>

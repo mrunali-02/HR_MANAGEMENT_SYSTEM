@@ -254,15 +254,17 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {/* Attendance Content */}
             {activeTab === 'attendance' && (
                 <div className="space-y-8">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap justify-between items-center gap-4">
                         <h3 className="text-lg font-medium text-primary">Attendance Overview</h3>
-                        <div className="text-sm text-secondary">Showing {filteredAttendance.length} records</div>
-                        <button
-                            onClick={downloadAttendanceExcel}
-                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
-                        >
-                            Export Excel
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="text-sm text-secondary hidden sm:block">Showing {filteredAttendance.length} records</div>
+                            <button
+                                onClick={downloadAttendanceExcel}
+                                className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm font-medium shadow-sm"
+                            >
+                                Export Excel
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -312,15 +314,17 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {/* Leave Content */}
             {activeTab === 'leaves' && (
                 <div className="space-y-8">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap justify-between items-center gap-4">
                         <h3 className="text-lg font-medium text-primary">Leave Overview</h3>
-                        <div className="text-sm text-secondary">Showing {filteredLeaves.length} records</div>
-                        <button
-                            onClick={downloadLeaveExcel}
-                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
-                        >
-                            Export Excel
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="text-sm text-secondary hidden sm:block">Showing {filteredLeaves.length} records</div>
+                            <button
+                                onClick={downloadLeaveExcel}
+                                className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm font-medium shadow-sm"
+                            >
+                                Export Excel
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -370,15 +374,17 @@ const EmployeeReports = ({ attendanceData = [], leaveData = [], employees = [] }
             {/* Roles Content */}
             {activeTab === 'roles' && isAdmin && (
                 <div className="space-y-8">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap justify-between items-center gap-4">
                         <h3 className="text-lg font-medium text-primary">Employees by Role</h3>
-                        <div className="text-sm text-secondary">Total Employees: {employees.length}</div>
-                        <button
-                            onClick={downloadRoleExcel}
-                            className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm"
-                        >
-                            Export Excel
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="text-sm text-secondary hidden sm:block">Total Employees: {employees.length}</div>
+                            <button
+                                onClick={downloadRoleExcel}
+                                className="bg-[color:var(--status-success)] text-white px-4 py-2 rounded hover:opacity-90 transition text-sm font-medium shadow-sm"
+                            >
+                                Export Excel
+                            </button>
+                        </div>
                     </div>
 
                     <div className="bg-[color:var(--bg-main)] p-4 rounded shadow-sm max-w-2xl mx-auto">

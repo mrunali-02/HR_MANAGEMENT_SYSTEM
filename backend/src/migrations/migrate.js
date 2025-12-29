@@ -47,7 +47,7 @@ async function migrate() {
     try {
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 
-        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'status')
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'status')
       `).then(async ([rows]) => {
         if (rows[0]['count(*)'] === 0) {
           await connection.execute("ALTER TABLE employees ADD COLUMN status ENUM('active', 'inactive') NOT NULL DEFAULT 'active'");
@@ -60,7 +60,7 @@ async function migrate() {
       for (const col of nameCols) {
         await connection.execute(`
           SELECT count(*) FROM information_schema.COLUMNS 
-          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col}')
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col}')
         `).then(async ([rows]) => {
           if (rows[0]['count(*)'] === 0) {
             await connection.execute(`ALTER TABLE employees ADD COLUMN ${col} VARCHAR(100)`);
@@ -72,7 +72,7 @@ async function migrate() {
       // Migration update: Add designation column
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 
-        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'designation')
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'designation')
       `).then(async ([rows]) => {
         if (rows[0]['count(*)'] === 0) {
           await connection.execute("ALTER TABLE employees ADD COLUMN designation VARCHAR(100)");
@@ -92,7 +92,7 @@ async function migrate() {
       for (const col of profileCols) {
         await connection.execute(`
            SELECT count(*) FROM information_schema.COLUMNS 
-           WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col.name}')
+           WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = '${col.name}')
          `).then(async ([rows]) => {
           if (rows[0]['count(*)'] === 0) {
             await connection.execute(`ALTER TABLE employees ADD COLUMN ${col.name} ${col.type}`);
@@ -106,7 +106,7 @@ async function migrate() {
       // Drop contact_number if exists (cleanup)
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 
-        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'contact_number')
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'contact_number')
       `).then(async ([rows]) => {
         if (rows[0]['count(*)'] > 0) {
           await connection.execute("ALTER TABLE employees DROP COLUMN contact_number");
@@ -267,7 +267,7 @@ async function migrate() {
       for (const col of geoCols) {
         await connection.execute(`
           SELECT count(*) FROM information_schema.COLUMNS 
-          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'attendance' AND COLUMN_NAME = '${col.name}')
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'attendance' AND COLUMN_NAME = '${col.name}')
         `).then(async ([rows]) => {
           if (rows[0]['count(*)'] === 0) {
             await connection.execute(`ALTER TABLE attendance ADD COLUMN ${col.name} ${col.type}`);
@@ -305,17 +305,59 @@ async function migrate() {
         type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
+        days INT DEFAULT 0,
         reason TEXT,
+        document_url VARCHAR(500),
         status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
         reviewed_by INT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
         FOREIGN KEY (reviewed_by) REFERENCES employees(id) ON DELETE SET NULL,
-        INDEX idx_leave_user (user_id)
+        INDEX idx_leave_user (user_id),
+        INDEX idx_leave_reviewed_by (reviewed_by)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✓ Created leave_requests table');
 
+    // Migration update: Add missing columns to leave_requests
+    try {
+      const leaveCols = [
+        { name: 'document_url', type: 'VARCHAR(500)' },
+        { name: 'days', type: 'INT DEFAULT 0' }
+      ];
+
+      for (const col of leaveCols) {
+        await connection.execute(`
+          SELECT count(*) FROM information_schema.COLUMNS 
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'leave_requests' AND COLUMN_NAME = '${col.name}')
+        `).then(async ([rows]) => {
+          if (rows[0]['count(*)'] === 0) {
+            await connection.execute(`ALTER TABLE leave_requests ADD COLUMN ${col.name} ${col.type}`);
+            console.log(`✓ Added ${col.name} column to leave_requests`);
+          }
+        });
+      }
+
+      // Migration update: Add missing indexes to leave_requests
+      const leaveIndexes = [
+        { name: 'idx_leave_user', column: 'user_id' },
+        { name: 'idx_leave_reviewed_by', column: 'reviewed_by' }
+      ];
+
+      for (const idx of leaveIndexes) {
+        await connection.execute(`
+          SELECT count(*) FROM information_schema.STATISTICS 
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'leave_requests' AND INDEX_NAME = '${idx.name}')
+        `).then(async ([rows]) => {
+          if (rows[0]['count(*)'] === 0) {
+            await connection.execute(`ALTER TABLE leave_requests ADD INDEX ${idx.name} (${idx.column})`);
+            console.log(`✓ Added index ${idx.name} to leave_requests`);
+          }
+        });
+      }
+    } catch (err) {
+      console.log('Note: leave_requests migration check failed or already exists', err.message);
+    }
     // Create leave balances table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS leave_balances (
@@ -353,7 +395,7 @@ async function migrate() {
     try {
       await connection.execute(`
         SELECT count(*) FROM information_schema.COLUMNS 
-        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'leave_balances' AND COLUMN_NAME = 'carried_forward')
+        WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'leave_balances' AND COLUMN_NAME = 'carried_forward')
       `).then(async ([rows]) => {
         if (rows[0]['count(*)'] === 0) {
           await connection.execute("ALTER TABLE leave_balances ADD COLUMN carried_forward INT NOT NULL DEFAULT 0");
@@ -393,7 +435,7 @@ async function migrate() {
       for (const col of whCols) {
         await connection.execute(`
             SELECT count(*) FROM information_schema.COLUMNS 
-            WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_db'}' AND TABLE_NAME = 'work_hours' AND COLUMN_NAME = '${col}')
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'work_hours' AND COLUMN_NAME = '${col}')
           `).then(async ([rows]) => {
           if (rows[0]['count(*)'] === 0) {
             await connection.execute(`ALTER TABLE work_hours ADD COLUMN ${col} BOOLEAN DEFAULT FALSE`);

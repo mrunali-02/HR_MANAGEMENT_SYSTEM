@@ -557,9 +557,28 @@ export async function updateEmployeeProfile(req, res) {
     // But if admin calls this, maybe they want to update name? Admin has their own update route.
     // I will remove 'name' update here to comply with request for "employee profile" specifically.
 
-    if (phone !== undefined) { userUpdates.push('phone = ?'); userParams.push(phone); }
-    if (address !== undefined) { userUpdates.push('address = ?'); userParams.push(address); }
-    if (emergency_contact !== undefined) { userUpdates.push('emergency_contact = ?'); userParams.push(emergency_contact); }
+    const phoneRegex = /^\d{0,10}$/;
+
+    if (phone !== undefined) {
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({ error: 'Phone number must be at most 10 digits and contain only numbers' });
+      }
+      userUpdates.push('phone = ?');
+      userParams.push(phone);
+    }
+
+    if (address !== undefined) {
+      userUpdates.push('address = ?');
+      userParams.push(address);
+    }
+
+    if (emergency_contact !== undefined) {
+      if (!phoneRegex.test(emergency_contact)) {
+        return res.status(400).json({ error: 'Emergency contact must be at most 10 digits and contain only numbers' });
+      }
+      userUpdates.push('emergency_contact = ?');
+      userParams.push(emergency_contact);
+    }
 
     if (userUpdates.length > 0) {
       userParams.push(userId);

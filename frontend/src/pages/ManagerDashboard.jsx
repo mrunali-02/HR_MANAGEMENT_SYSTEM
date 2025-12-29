@@ -6,12 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatDate } from '../utils/dateUtils';
-import { Bell } from 'lucide-react';
+import { Bell, Menu, X, LogOut, LayoutDashboard, Users, Clock, FileText, PlusCircle, Calendar as CalendarIcon, BarChart as BarChartIcon, User as UserIcon } from 'lucide-react';
 import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:5000/api';
-//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const TABS = {
   DASHBOARD: 'dashboard',
@@ -80,6 +79,7 @@ function ManagerDashboard() {
   // Emergency Contact editing state
   const [isEditingEmergency, setIsEditingEmergency] = useState(false);
   const [tempEmergency, setTempEmergency] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
 
@@ -1516,9 +1516,13 @@ function ManagerDashboard() {
                       <input
                         type="text"
                         value={tempPhone}
-                        onChange={(e) => setTempPhone(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val.length <= 10) setTempPhone(val);
+                        }}
+                        maxLength="10"
                         className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Enter phone number"
+                        placeholder="Enter 10-digit phone"
                       />
                       <button
                         onClick={handleSavePhone}
@@ -1600,9 +1604,13 @@ function ManagerDashboard() {
                       <input
                         type="text"
                         value={tempEmergency}
-                        onChange={(e) => setTempEmergency(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val.length <= 10) setTempEmergency(val);
+                        }}
+                        maxLength="10"
                         className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Enter emergency contact"
+                        placeholder="Enter 10-digit contact"
                       />
                       <button
                         onClick={handleSaveEmergency}
@@ -1747,125 +1755,98 @@ function ManagerDashboard() {
   // ---------- MAIN LAYOUT (same shell as Admin) ----------
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-[color:var(--bg-main)] flex overflow-hidden">
+      {/* Sidebar Overlay (Mobile) */}
+      <div
+        className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <aside className="w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl">
-        <div className="h-16 flex items-center justify-center border-b border-slate-800">
-          <span className="text-lg font-semibold tracking-wide">
-            HRMS Manager
-          </span>
+      <aside className={`sidebar-drawer w-64 bg-[#2e2e2e] text-[#f6f3ee] flex flex-col shadow-xl lg:static lg:left-0 ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-[#3f4a59]">
+          <span className="text-lg font-bold tracking-wide">HRMS Manager</span>
+          <button className="lg:hidden text-[#f6f3ee]" onClick={() => setIsSidebarOpen(false)}>
+            <X size={24} />
+          </button>
         </div>
-
-        <nav className="flex-1 py-4 space-y-1">
-          <button
-            onClick={() => setActiveTab(TABS.DASHBOARD)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.DASHBOARD
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.ATTENDANCE)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.ATTENDANCE
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Team Attendance
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.WORK_HOURS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.WORK_HOURS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Work Hours
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.LEAVES)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.LEAVES
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Leave Requests
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.APPLY_LEAVE)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.APPLY_LEAVE
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Apply Leave
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.CALENDAR)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.CALENDAR
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Calendar & Attendance
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.REPORTS)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.REPORTS
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Team Reports
-          </button>
-          <button
-            onClick={() => setActiveTab(TABS.PROFILE)}
-            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition ${activeTab === TABS.PROFILE
-              ? 'bg-[#3f4a59] text-white'
-              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
-              }`}
-          >
-            Profile
-          </button>
+        <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
+          {[
+            { id: TABS.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
+            { id: TABS.ATTENDANCE, label: 'Team Attendance', icon: Users },
+            { id: TABS.WORK_HOURS, label: 'Work Hours', icon: Clock },
+            { id: TABS.LEAVES, label: 'Leave Requests', icon: FileText },
+            { id: TABS.APPLY_LEAVE, label: 'Apply Leave', icon: PlusCircle },
+            { id: TABS.CALENDAR, label: 'Calendar', icon: CalendarIcon },
+            { id: TABS.REPORTS, label: 'Team Reports', icon: BarChartIcon },
+            { id: TABS.PROFILE, label: 'Profile', icon: UserIcon },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition rounded-md ${activeTab === item.id
+                ? 'bg-[#3f4a59] text-white shadow-sm'
+                : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
+                }`}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
         </nav>
-
         <div className="border-t border-[#3f4a59] p-4">
           <button
             onClick={handleLogout}
-            className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
+            className="w-full inline-flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors"
           >
+            <LogOut size={16} />
             Logout
           </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top bar */}
-        <header className="h-auto py-4 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8">
-          <div>
-            <h1 className="text-xl font-bold text-primary block mb-1">Vivekanand Technologies</h1>
-            <h2 className="text-lg font-semibold text-secondary">
-              {activeTab === TABS.DASHBOARD && 'Dashboard'}
-              {activeTab === TABS.ATTENDANCE && 'Team Attendance'}
-              {activeTab === TABS.WORK_HOURS && 'Work Hours'}
-              {activeTab === TABS.LEAVES && 'Team Leave Requests'}
-              {activeTab === TABS.APPLY_LEAVE && 'Apply Leave'}
-              {activeTab === TABS.REPORTS && 'Team Reports'}
-              {activeTab === TABS.PROFILE && 'Profile'}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Signed in as {managerUser?.name || managerUser?.email} (
-              {managerUser?.role})
-            </p>
+        <header className="h-16 flex-shrink-0 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden text-gray-600 hover:text-gray-900"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden sm:block">
+              <h1 className="text-xl font-bold text-gray-900">Vivekanand Technologies</h1>
+            </div>
+            <div className="sm:hidden">
+              <h1 className="text-lg font-bold text-gray-900">Manager</h1>
+            </div>
           </div>
 
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-semibold text-gray-900">{managerUser?.name || 'Manager'}</p>
+              <p className="text-xs text-gray-500 uppercase">{activeTab}</p>
+            </div>
+            <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border-2 border-white shadow-sm">
+              {managerUser?.name?.charAt(0) || 'M'}
+            </div>
+          </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 p-6 overflow-y-auto">
+        {/* Content area */}
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto bg-[color:var(--bg-main)]">
+          {error && (
+            <div className="max-w-7xl mx-auto mb-6">
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-sm">
+                <p className="text-sm text-red-700 font-medium">{error}</p>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
               {error}

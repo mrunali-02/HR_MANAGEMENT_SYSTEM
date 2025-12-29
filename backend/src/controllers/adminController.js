@@ -179,6 +179,14 @@ export async function addEmployee(req, res) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
+    const phoneRegex = /^\d{0,10}$/;
+    if (phone && !phoneRegex.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be at most 10 digits and contain only numbers' });
+    }
+    if (emergency_contact && !phoneRegex.test(emergency_contact)) {
+      return res.status(400).json({ error: 'Emergency contact must be at most 10 digits and contain only numbers' });
+    }
+
     const [existing] = await db.execute('SELECT id FROM employees WHERE email = ?', [email]);
     if (existing.length > 0) {
       return res.status(400).json({ error: 'Email already exists' });
@@ -342,6 +350,14 @@ export async function updateEmployee(req, res) {
 
     if (status && !['active', 'inactive'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const phoneRegex = /^\d{0,10}$/;
+    if (phone && !phoneRegex.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be at most 10 digits and contain only numbers' });
+    }
+    if (emergency_contact && !phoneRegex.test(emergency_contact)) {
+      return res.status(400).json({ error: 'Emergency contact must be at most 10 digits and contain only numbers' });
     }
 
     const [updateResult] = await db.execute(
