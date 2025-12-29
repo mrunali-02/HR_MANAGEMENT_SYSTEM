@@ -53,6 +53,14 @@ import {
   createAdminLeave,
 } from '../controllers/adminController.js';
 
+// Carry Forward imports
+import {
+  previewCarryForward,
+  confirmCarryForward,
+  getCarryForwardStatus,
+  updateEmployeeCarryForward
+} from '../controllers/carryForwardController.js';
+
 const router = express.Router();
 
 // -- Public / Auth --
@@ -78,6 +86,12 @@ router.get('/leave-requests', authToken, requireRole('admin'), getLeaveRequests)
 router.get('/leave-statistics', authToken, requireRole('admin'), getLeaveStatistics);
 router.put('/leave-requests/:id/approve', authToken, requireRole('admin'), approveLeaveRequest);
 router.put('/leave-requests/:id/reject', authToken, requireRole('admin'), rejectLeaveRequest);
+
+// Leave Carry Forward
+router.get('/leave-carry-forward/preview', authToken, requireRole('admin'), previewCarryForward);
+router.post('/leave-carry-forward/confirm', authToken, requireRole('admin'), confirmCarryForward);
+router.get('/leave-carry-forward/status', authToken, requireRole('admin'), getCarryForwardStatus);
+router.put('/leave-carry-forward/employee/:id', authToken, requireRole('admin'), updateEmployeeCarryForward);
 
 // Attendance Records (Work Hours)
 router.get('/attendance-records', authToken, requireRole('admin'), getAllAttendanceRecords);

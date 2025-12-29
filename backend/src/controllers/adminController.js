@@ -518,6 +518,12 @@ export async function approveLeaveRequest(req, res) {
                 VALUES (?, ?, ?, '10:00:00', '19:00:00', 9)`,
               [user_id, attId, dateStr]
             );
+
+            await logAudit(req.user.id, 'wfh_attendance_auto_marked', {
+              employee_id: user_id,
+              date: dateStr,
+              leave_type: 'work_from_home'
+            });
           }
         } catch (err) {
           console.error(`Failed to auto-mark WFH attendance for ${dateStr}:`, err);
@@ -542,7 +548,23 @@ export async function createAdminLeave(req, res) {
       return res.status(400).json({ error: 'Start and end dates are required' });
     }
 
-    // 1. Create auto-approved leave request
+    // 1. Check for overlapping leave requests
+    const [existing] = await db.execute(
+      `SELECT id FROM leave_requests 
+       WHERE user_id = ? 
+       AND status != 'rejected'
+       AND status != 'cancelled'
+       AND (start_date <= ? AND end_date >= ?)`,
+      [adminId, endDate, startDate]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        error: 'You already have a leave request for these dates. Please cancel or modify the existing request first.'
+      });
+    }
+
+    // 2. Create auto-approved leave request
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end - start);
@@ -554,7 +576,7 @@ export async function createAdminLeave(req, res) {
       [adminId, startDate, endDate, reason || 'Admin Leave', adminId, days]
     );
 
-    // 2. Broadcast Notification to ALL active employees
+    // 3. Broadcast Notification to ALL active employees
     // We can do this with a single INSERT ... SELECT query for efficiency
     const message = `Admin ${req.user.name || 'Administrator'} is on leave from ${formatDate(start)} to ${formatDate(end)}.`;
 

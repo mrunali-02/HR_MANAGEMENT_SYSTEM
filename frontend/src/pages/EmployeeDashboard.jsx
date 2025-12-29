@@ -9,6 +9,7 @@ import EmployeeReports from '../components/EmployeeReports';
 import { formatDate } from '../utils/dateUtils';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:3000/api';
+//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 function EmployeeDashboard() {
   const { id } = useParams();
@@ -286,7 +287,7 @@ function EmployeeDashboard() {
         setSuccess('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 
@@ -320,12 +321,9 @@ function EmployeeDashboard() {
             { headers: { Authorization: `Bearer ${token}` } }
           );
 
-          // Only set success if we're on the attendance tab
-          if (activeTab === 'attendance') {
-            const hours = response.data.total_hours || '0';
-            setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
-            setTimeout(() => setSuccess(''), 5000);
-          }
+          const hours = response.data.total_hours || '0';
+          setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
+          setTimeout(() => setSuccess(''), 5000);
 
           // Mark as checked out and refresh attendance
           setCheckoutMarked(true);
@@ -341,11 +339,9 @@ function EmployeeDashboard() {
             errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
           }
 
-          if (activeTab === 'attendance') {
-            setError(errorMsg);
-            if (success === 'Fetching location...') setSuccess('');
-            setTimeout(() => setError(''), 5000);
-          }
+          setError(errorMsg);
+          setSuccess('');
+          setTimeout(() => setError(''), 5000);
         }
       },
       (geoError) => {
@@ -355,12 +351,10 @@ function EmployeeDashboard() {
         else if (geoError.code === 2) msg = 'Location unavailable.';
         else if (geoError.code === 3) msg = 'Location request timed out.';
 
-        if (activeTab === 'attendance') {
-          setError(msg);
-          setSuccess('');
-        }
+        setError(msg);
+        setSuccess('');
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 

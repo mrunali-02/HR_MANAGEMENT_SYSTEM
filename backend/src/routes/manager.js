@@ -9,11 +9,9 @@ import {
   getTeamWorkHours,
   getTeamStats
 } from "../controllers/managerController.js";
+import { getUserProfile } from '../controllers/userController.js';
 
 const router = express.Router();
-
-// Manager profile
-router.get("/:id", authToken, getManagerProfile);
 
 // Team data routes
 router.get("/team/attendance", authToken, getTeamAttendance);
@@ -22,5 +20,9 @@ router.put("/team/leave-requests/:id/approve", authToken, approveTeamLeave);
 router.put("/team/leave-requests/:id/reject", authToken, rejectTeamLeave);
 router.get("/team/work-hours", authToken, getTeamWorkHours);
 router.get("/team/stats", authToken, getTeamStats);
+
+// Parameterized routes last
+router.get("/:id", authToken, getManagerProfile);
+router.get("/profile/:id", authToken, getUserProfile);
 
 export default router;

@@ -10,8 +10,8 @@ import { Bell } from 'lucide-react';
 import CalendarView from '../components/CalendarView';
 import './AdminDashboard.css'; // reuse admin styling
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:5000/api';
+//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const TABS = {
   DASHBOARD: 'dashboard',
@@ -337,7 +337,7 @@ function ManagerDashboard() {
         setError(msg);
         setSuccess('');
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 

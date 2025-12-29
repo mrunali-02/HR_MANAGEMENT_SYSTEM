@@ -1,4 +1,5 @@
 import db from '../db/db.js';
+import { logAudit } from '../utils/audit.js';
 
 async function backfillAbsents() {
     try {
@@ -46,6 +47,12 @@ async function backfillAbsents() {
                     ) VALUES (?, ?, 'absent', NULL, NULL, FALSE)`,
                         [emp.id, dateStr]
                     );
+
+                    await logAudit(null, 'auto_absent_backfilled', {
+                        user_id: emp.id,
+                        date: dateStr,
+                        reason: 'Backfill script'
+                    });
                     totalMarked++;
                 }
 

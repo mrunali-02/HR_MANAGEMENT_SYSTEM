@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import db from '../db/db.js';
+import { logAudit } from '../utils/audit.js';
 
 export const initAttendanceCron = () => {
     // Schedule task to run at 7:00 PM (19:00) every day
@@ -44,6 +45,12 @@ export const initAttendanceCron = () => {
             ) VALUES (?, CURDATE(), 'absent', NULL, NULL)`,
                     [employee.id]
                 );
+
+                await logAudit(null, 'auto_absent_marked', {
+                    user_id: employee.id,
+                    date: new Date().toISOString().split('T')[0],
+                    reason: 'No attendance marked and not on leave'
+                });
             }
             console.log('Daily absenteeism check completed.');
         } catch (error) {
@@ -131,6 +138,14 @@ export const initAttendanceCron = () => {
                     isLate,
                     isLeftEarly
                 ]);
+
+                await logAudit(null, 'auto_checkout_marked', {
+                    user_id: record.user_id,
+                    attendance_id: record.id,
+                    date: record.attendance_date,
+                    checkout_time: checkoutTime,
+                    total_hours: totalHours
+                });
 
                 console.log(`Auto-checked out user ${record.user_id} at 19:00:00`);
             }

@@ -25,7 +25,7 @@ import {
 import './HrDashboard.css';
 import CalendarView from '../components/CalendarView';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const TABS = {
   DASHBOARD: 'Dashboard',
@@ -133,12 +133,13 @@ function HrDashboard() {
   const [userNotifications, setUserNotifications] = useState([]);
 
   useEffect(() => {
-    if (!user || user.role !== 'hr') {
+    if (!user || (user.role !== 'hr' && user.role !== 'admin')) {
       navigate('/login');
       return;
     }
 
     // load required data once
+    setLoading(true);
     Promise.all([
       fetchUsers(),
       fetchManagers(),
@@ -151,7 +152,10 @@ function HrDashboard() {
       fetchSettings(),
       fetchMyLeaveBalance(),
       fetchUserNotifications()
-    ]).finally(() => {
+    ]).catch(err => {
+      console.error('Initial data fetch failed:', err);
+      // Ensure we don't get stuck in loading state even on error
+    }).finally(() => {
       setLoading(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -633,7 +637,7 @@ function HrDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 
@@ -697,7 +701,7 @@ function HrDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 
@@ -2142,6 +2146,17 @@ function HrDashboard() {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading HR Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-gray-100">

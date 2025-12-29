@@ -17,16 +17,18 @@ import {
 } from 'recharts';
 import CalendarView from '../components/CalendarView';
 import EmployeeReports from '../components/EmployeeReports';
+import LeaveCarryForward from '../components/LeaveCarryForward';
 import { formatDate } from '../utils/dateUtils';
 import { Save } from 'lucide-react';
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const TABS = {
   DASHBOARD: 'dashboard',
   EMPLOYEES: 'employees',
   LEAVE_APPLICATIONS: 'leaveApplications',
+  LEAVE_CARRY_FORWARD: 'leaveCarryForward',
   WORK_HOURS: 'workHours',
   REPORTS: 'reports',
   AUDIT_LOGS: 'auditLogs',
@@ -680,7 +682,7 @@ function AdminDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 
@@ -737,7 +739,7 @@ function AdminDashboard() {
         setSuccess('');
         setTimeout(() => setError(''), 5000);
       },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
   };
 
@@ -2469,6 +2471,15 @@ function AdminDashboard() {
             Leave Applications
           </button>
           <button
+            onClick={() => setActiveTab(TABS.LEAVE_CARRY_FORWARD)}
+            className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.LEAVE_CARRY_FORWARD
+              ? 'bg-[#3f4a59] text-white'
+              : 'text-[#f6f3ee] hover:bg-[#3f4a59] hover:text-white'
+              }`}
+          >
+            Leave Carry Forward
+          </button>
+          <button
             onClick={() => setActiveTab(TABS.CALENDAR)}
             className={`w-full text-left px-5 py-2.5 text-sm font-medium transition rounded-md ${activeTab === TABS.CALENDAR
               ? 'bg-[#3f4a59] text-white'
@@ -2534,6 +2545,7 @@ function AdminDashboard() {
               {activeTab === TABS.DASHBOARD && 'Dashboard'}
               {activeTab === TABS.EMPLOYEES && 'Employee Management'}
               {activeTab === TABS.LEAVE_APPLICATIONS && 'Leave Applications'}
+              {activeTab === TABS.LEAVE_CARRY_FORWARD && 'Leave Carry Forward'}
               {activeTab === TABS.CALENDAR && 'Calendar & Holidays'}
               {activeTab === TABS.AUDIT_LOGS && 'Audit Logs'}
               {activeTab === TABS.REPORTS && 'Reports'}
@@ -2550,6 +2562,7 @@ function AdminDashboard() {
           {activeTab === TABS.DASHBOARD && renderDashboard()}
           {activeTab === TABS.EMPLOYEES && renderEmployeeList()}
           {activeTab === TABS.LEAVE_APPLICATIONS && renderLeaveApplications()}
+          {activeTab === TABS.LEAVE_CARRY_FORWARD && <LeaveCarryForward />}
           {activeTab === TABS.CALENDAR && renderCalendar()}
           {activeTab === TABS.AUDIT_LOGS && renderAuditLogs()}
           {activeTab === TABS.WORK_HOURS && (

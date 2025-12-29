@@ -4,9 +4,10 @@ import axios from 'axios';
 const AuthContext = createContext(null);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://122.179.153.216:5000/api';
+//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Configure axios defaults
-axios.defaults.baseURL = API_BASE_URL;
+// axios.defaults.baseURL = API_BASE_URL;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -42,31 +43,31 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/login', { email, password });
+      const response = await axios.post(`${API_BASE_URL}/login`, { email, password });
 
       const { token: newToken, user: userData } = response.data;
-      
+
       if (!newToken || !userData) {
         return {
           success: false,
           error: 'Invalid response from server'
         };
       }
-      
+
       setToken(newToken);
       setUser(userData);
-      
+
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
-      
+
       axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
 
       return { success: true, user: userData };
     } catch (error) {
       console.error('Login error:', error);
-      const errorMessage = error.response?.data?.error || 
-                          error.message || 
-                          'Login failed. Please check your connection and try again.';
+      const errorMessage = error.response?.data?.error ||
+        error.message ||
+        'Login failed. Please check your connection and try again.';
       return {
         success: false,
         error: errorMessage
@@ -77,7 +78,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       if (token) {
-        await axios.post('/logout');
+        await axios.post(`${API_BASE_URL}/logout`);
       }
     } catch (error) {
       console.error('Logout error:', error);

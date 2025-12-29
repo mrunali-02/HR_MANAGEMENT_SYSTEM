@@ -53,7 +53,7 @@ import { initAttendanceCron } from './cron/attendanceJobs.js';
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://122.179.153.216:${PORT}/health`);
-
+  //console.log(`Health check: http://localhost:${PORT}/health`);
   // Initialize Cron Jobs
   initAttendanceCron();
 });

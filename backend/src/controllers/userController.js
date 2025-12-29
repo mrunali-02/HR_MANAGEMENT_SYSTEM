@@ -233,9 +233,13 @@ export async function markAttendance(req, res) {
     );
     const isWfh = wfh.length > 0;
 
+    const now = new Date();
+    const nowTime = now.toTimeString().substring(0, 8);
+    let distance = null; // Declare distance here for logging accessibility
+
     // Only validate distance if NOT WFH and Office coords are set
     if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
-      const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+      distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
       console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
 
       if (distance > MAX_DISTANCE) {
@@ -249,9 +253,6 @@ export async function markAttendance(req, res) {
       console.log('Attendance Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
     }
 
-    const now = new Date();
-    const nowTime = now.toTimeString().substring(0, 8);
-
     await db.execute(
       `INSERT INTO attendance (
         user_id, attendance_date, status, check_in_time, 
@@ -263,7 +264,7 @@ export async function markAttendance(req, res) {
     await logAudit(userId, 'attendance_marked', {
       attendance_date: new Date().toISOString().split('T')[0],
       check_in: nowTime,
-      location: { lat: latitude, lng: longitude, distance }
+      location: { lat: latitude, lng: longitude, distance: distance ? Math.round(distance) : null }
     });
 
     res.json({
@@ -284,12 +285,50 @@ export async function getLeaveBalance(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    const currentYear = new Date().getFullYear();
+
+    // Try to get year-specific balances first (for carry forward support)
+    const [balanceRecords] = await db.execute(
+      'SELECT * FROM leave_balances WHERE user_id = ? AND year = ?',
+      [userId, currentYear]
+    );
+
+    if (balanceRecords.length > 0) {
+      // Use stored year-specific balances (includes carried forward)
+      const result = {
+        total: 0,
+        used: 0,
+        sick: 0,
+        casual: 0,
+        paid: 0,
+        carried_forward: 0,
+        carried_from_year: null
+      };
+
+      balanceRecords.forEach(record => {
+        result[record.leave_type] = record.remaining_days;
+        result.total += record.total_days;
+        result.used += record.used_days;
+
+        // Capture carried forward info (only for planned/paid leave)
+        if (record.carried_forward > 0 && record.leave_type === 'paid') {
+          result.carried_forward = record.carried_forward;
+          result.carried_from_year = currentYear - 1;
+        }
+      });
+
+      return res.json(result);
+    }
+
+    // Fall back to dynamic calculation (existing logic for backward compatibility)
     const base = {
       total: 0,
       used: 0,
       sick: 0,
       casual: 0,
       paid: 0,
+      carried_forward: 0,
+      carried_from_year: null
     };
 
     const [policies] = await db.execute(
@@ -747,7 +786,6 @@ export async function markCheckout(req, res) {
     const totalMinutes = workHoursResult[0]?.minutes || 0;
     const totalHoursDecimal = totalMinutes / 60;
     const totalHours = parseFloat(totalHoursDecimal.toFixed(2));
-    const overtimeHours = 0; // Overtime removed from project
 
     // Calculate Late and Left Early
     // Check In > 10:00:00
@@ -758,12 +796,11 @@ export async function markCheckout(req, res) {
     // Insert or update work_hours record
     await db.execute(
       `INSERT INTO work_hours 
-       (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours, overtime_hours, is_late, is_left_early)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours, is_late, is_left_early)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
        check_out_time = VALUES(check_out_time),
        total_hours = VALUES(total_hours),
-       overtime_hours = VALUES(overtime_hours),
        is_late = VALUES(is_late),
        is_left_early = VALUES(is_left_early),
        updated_at = CURRENT_TIMESTAMP`,
@@ -774,7 +811,6 @@ export async function markCheckout(req, res) {
         att.check_in_time,
         nowTime,
         totalHours,
-        overtimeHours,
         isLate,
         isLeftEarly
       ]
@@ -782,14 +818,12 @@ export async function markCheckout(req, res) {
 
     await logAudit(userId, 'checkout_marked', {
       attendance_id: att.id,
-      total_hours: totalHours,
-      overtime_hours: overtimeHours
+      total_hours: totalHours
     });
 
     res.json({
       message: 'Checkout marked successfully',
-      total_hours: totalHours,
-      overtime_hours: 0
+      total_hours: totalHours
     });
   } catch (error) {
     console.error('Mark checkout error:', error);

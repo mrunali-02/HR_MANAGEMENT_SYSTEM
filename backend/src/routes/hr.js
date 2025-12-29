@@ -24,6 +24,7 @@ import {
   exportAuditLogs,
   exportWorkHoursExcel
 } from '../controllers/adminController.js';
+import { getUserProfile } from '../controllers/userController.js';
 
 import { authToken } from '../middlewares/authToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
@@ -57,5 +58,8 @@ router.get('/export/leaves', exportLeaves);
 router.get('/export/employees', exportEmployees);
 router.get('/export/audit-logs', exportAuditLogs);
 router.get('/export/work-hours-excel', exportWorkHoursExcel);
+
+// Parameterized routes last to avoid capturing literal routes (e.g., /users)
+router.get('/:id', getUserProfile);
 
 export default router;
