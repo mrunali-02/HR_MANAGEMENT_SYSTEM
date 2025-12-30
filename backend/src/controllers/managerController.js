@@ -1,5 +1,12 @@
-// src/controllers/managerController.js
 import db from '../db/db.js';
+import { logAudit, createNotification } from '../utils/audit.js';
+
+const formatDate = (dateValue) => {
+  if (!dateValue) return null;
+  if (typeof dateValue === 'string') return dateValue.substring(0, 10);
+  const iso = typeof dateValue.toISOString === 'function' ? dateValue.toISOString() : String(dateValue);
+  return iso.substring(0, 10);
+};
 
 /* ============================
    MANAGER PROFILE
@@ -318,6 +325,30 @@ export async function approveTeamLeave(req, res) {
       return res
         .status(404)
         .json({ error: 'Leave not found, not pending, or not in your team' });
+    }
+
+    // Fetch details for notification
+    const [leaveRequest] = await db.execute(
+      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
+       JOIN employees e ON lr.user_id = e.id 
+       WHERE lr.id = ?`,
+      [leaveId]
+    );
+
+    if (leaveRequest.length > 0) {
+      const { user_id, type, start_date, end_date, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
+
+      // 1. Notify Requester
+      await createNotification(
+        user_id,
+        `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved by your manager.`
+      );
+
+      // 3. Log Audit
+      await logAudit(managerId, 'leave_approved_by_manager', {
+        leave_id: leaveId,
+        applicant_id: user_id
+      });
     }
 
     res.json({ message: 'Leave approved' });

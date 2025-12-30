@@ -36,7 +36,7 @@ async function runMigration() {
         if (rows.length === 0) {
             await connection.query(`
         INSERT INTO leave_policies (name, type, total_days, carry_forward) 
-        VALUES ('Work From Home', 'work_from_home', 10, 0)
+        VALUES ('Work From Home', 'work_from_home', 100, 0)
       `);
             console.log('✓ Inserted default Work From Home policy (10 days)');
         } else {

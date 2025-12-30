@@ -305,19 +305,56 @@ export async function getLeaveBalance(req, res) {
         carried_from_year: null
       };
 
+      // Get current leave policies (these are the source of truth)
+      const [policies] = await db.execute(
+        'SELECT type, total_days FROM leave_policies'
+      );
+      const policyMap = {};
+      policies.forEach((policy) => {
+        policyMap[policy.type] = policy.total_days;
+      });
+
+      // Extract carried forward and used days from balance records
       balanceRecords.forEach(record => {
-        result[record.leave_type] = record.remaining_days;
-        result.total += record.total_days;
         result.used += record.used_days;
 
-        // Capture carried forward info (only for planned/paid leave)
-        if (record.carried_forward > 0 && record.leave_type === 'paid') {
-          result.carried_forward = record.carried_forward;
-          result.carried_from_year = currentYear - 1;
+        // Track carried forward amounts
+        if (record.carried_forward > 0) {
+          if (record.leave_type === 'paid') {
+            result.carried_forward = record.carried_forward;
+            result.carried_from_year = currentYear - 1;
+          }
         }
       });
 
-      return res.json(result);
+      // Calculate current balances using CURRENT policies + carried forward
+      result.sick = (policyMap.sick || 0);
+      result.casual = (policyMap.casual || 0);
+      result.paid = (policyMap.paid || 0);
+
+      // Add carried forward to respective types
+      balanceRecords.forEach(record => {
+        if (record.carried_forward > 0) {
+          if (result[record.leave_type] !== undefined) {
+            result[record.leave_type] += record.carried_forward;
+          }
+        }
+      });
+
+      // Subtract used days from each type
+      balanceRecords.forEach(record => {
+        if (result[record.leave_type] !== undefined) {
+          result[record.leave_type] -= record.used_days;
+        }
+      });
+
+      // Calculate total
+      result.total = result.sick + result.casual + result.paid;
+
+      return res.json({
+        ...result,
+        policies: policyMap
+      });
     }
 
     // Fall back to dynamic calculation (existing logic for backward compatibility)
@@ -334,9 +371,18 @@ export async function getLeaveBalance(req, res) {
     const [policies] = await db.execute(
       'SELECT type, total_days FROM leave_policies'
     );
+    const policyMap = {};
     policies.forEach((policy) => {
-      base[policy.type] = policy.total_days;
-      base.total += policy.total_days;
+      policyMap[policy.type] = policy.total_days;
+
+      // Update base with policy totals
+      if (base[policy.type] !== undefined) {
+        base[policy.type] = policy.total_days;
+        // Only include sick, casual, paid in total leave pool
+        if (['sick', 'casual', 'paid'].includes(policy.type)) {
+          base.total += policy.total_days;
+        }
+      }
     });
 
     // Only count approved leaves from 2025 onwards (ignore historical leaves before 2025)
@@ -353,11 +399,14 @@ export async function getLeaveBalance(req, res) {
       base.used += row.days;
       const key = row.type;
       if (typeof base[key] === 'number') {
-        base[key] = base[key] - row.days;
+        base[key] = Math.max(0, base[key] - row.days);
       }
     });
 
-    res.json(base);
+    res.json({
+      ...base,
+      policies: policyMap
+    });
   } catch (error) {
     console.error('Get leave balance error:', error);
     res.status(500).json({ error: 'Failed to fetch leave balance' });

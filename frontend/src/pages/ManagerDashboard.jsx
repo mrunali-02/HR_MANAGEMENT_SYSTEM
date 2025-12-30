@@ -43,7 +43,13 @@ function ManagerDashboard() {
     document: null
   });
   const [myLeaveSubmitting, setMyLeaveSubmitting] = useState(false);
-  const [leaveBalance, setLeaveBalance] = useState({ sick: 0, casual: 0, paid: 0, used: 0, total: 0 });
+  const [leaveBalance, setLeaveBalance] = useState({ sick: 0, casual: 0, paid: 0, used: 0, total: 24 });
+  const [leavePolicies, setLeavePolicies] = useState({
+    sick: 6,
+    casual: 6,
+    paid: 12,
+    work_from_home: 0
+  });
 
   // Manager-specific data
   const [teamAttendance, setTeamAttendance] = useState([]);
@@ -108,7 +114,11 @@ function ManagerDashboard() {
       const res = await axios.get(`${API_BASE_URL}/employee/${id}/leave-balance`, {
         headers: getAuthHeader(),
       });
-      setLeaveBalance(res.data || { sick: 0, casual: 0, paid: 0, used: 0, total: 0 });
+      const data = res.data || { sick: 0, casual: 0, paid: 0, used: 0, total: 24 };
+      setLeaveBalance(data);
+      if (data.policies) {
+        setLeavePolicies(data.policies);
+      }
     } catch (err) {
       console.error('Error fetching leave balance:', err);
     }
@@ -494,15 +504,15 @@ function ManagerDashboard() {
             <div className="flex gap-2 text-xs mt-2 w-full justify-around">
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                <span>Sick: {leaveBalance?.sick || 0}</span>
+                <span>Sick ({leavePolicies.sick}): {leaveBalance?.sick || 0}</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                <span>Cas: {leaveBalance?.casual || 0}</span>
+                <span>Cas ({leavePolicies.casual}): {leaveBalance?.casual || 0}</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                <span>Pln: {leaveBalance?.paid || 0}</span>
+                <span>Pln ({leavePolicies.paid}): {leaveBalance?.paid || 0}</span>
               </div>
             </div>
           </div>

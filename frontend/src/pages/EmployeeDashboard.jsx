@@ -36,6 +36,7 @@ function EmployeeDashboard() {
     sick: 0,
     casual: 0,
     paid: 0,
+    total: 24,
   });
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [leaveForm, setLeaveForm] = useState({
@@ -47,6 +48,12 @@ function EmployeeDashboard() {
   });
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [holidays, setHolidays] = useState([]); // [NEW]
+  const [leavePolicies, setLeavePolicies] = useState({
+    sick: 6,
+    casual: 6,
+    paid: 12,
+    work_from_home: 0
+  });
 
   // Notifications
   const [notifications, setNotifications] = useState([]);
@@ -144,10 +151,14 @@ function EmployeeDashboard() {
       // 3) Leave balance & history
       try {
         const balanceRes = await axios.get(`${API_BASE_URL}/employee/${id}/leave-balance`, { headers });
+        const data = balanceRes.data || {};
         setLeaveBalance((prev) => ({
           ...prev,
-          ...(balanceRes.data || {})
+          ...data
         }));
+        if (data.policies) {
+          setLeavePolicies(data.policies);
+        }
       } catch (err) {
         console.error('Error fetching leave balance:', err);
       }
@@ -802,7 +813,7 @@ function EmployeeDashboard() {
                   <div>
                     <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Leave Balance</div>
                     <div className="mt-2 text-3xl font-bold text-primary">
-                      {(leaveBalance.sick || 0) + (leaveBalance.casual || 0) + (leaveBalance.paid || 0)}/24
+                      {(leaveBalance.sick || 0) + (leaveBalance.casual || 0) + (leaveBalance.paid || 0)}/{leaveBalance.total || 24}
                     </div>
                     <div className="mt-1 text-xs text-secondary opacity-80">
                       Days Remaining
@@ -811,15 +822,15 @@ function EmployeeDashboard() {
                   <div className="mt-4 grid grid-cols-3 gap-1 text-xs text-secondary opacity-90 font-medium">
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Planned</span>
-                      <span className="text-sm">{leaveBalance.paid}</span>
+                      <span className="text-sm">{leavePolicies.paid}</span>
                     </div>
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Casual</span>
-                      <span className="text-sm">{leaveBalance.casual}</span>
+                      <span className="text-sm">{leavePolicies.casual}</span>
                     </div>
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Sick</span>
-                      <span className="text-sm">{leaveBalance.sick}</span>
+                      <span className="text-sm">{leavePolicies.sick}</span>
                     </div>
                   </div>
                 </div>

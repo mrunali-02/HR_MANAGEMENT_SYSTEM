@@ -425,7 +425,7 @@ export async function getLeaveStatistics(req, res) {
     const [stats] = await db.execute(`
       SELECT 
         type,
-        SUM(DATEDIFF(end_date, start_date) + 1) as count
+        COUNT(*) as count
       FROM leave_requests
       WHERE (YEAR(start_date) = ? OR YEAR(end_date) = ?)
         AND status = 'approved'
@@ -465,7 +465,7 @@ export async function approveLeaveRequest(req, res) {
   try {
     // Check if the user whose leave is being processed is an HR
     const [leaveRequest] = await db.execute(
-      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role FROM leave_requests lr 
+      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
        JOIN employees e ON lr.user_id = e.id 
        WHERE lr.id = ?`,
       [req.params.id]
@@ -475,7 +475,7 @@ export async function approveLeaveRequest(req, res) {
       return res.status(404).json({ error: 'Leave request not found' });
     }
 
-    const { user_id, type, start_date, end_date, role: requesterRole } = leaveRequest[0];
+    const { user_id, type, start_date, end_date, role: requesterRole, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
 
     // If requester is HR (or Admin), ONLY Admin can approve
     if (requesterRole === 'hr' || requesterRole === 'admin') {
@@ -486,7 +486,7 @@ export async function approveLeaveRequest(req, res) {
 
     await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
 
-    // Send Notification
+    // Send Notification to requester
     await createNotification(
       user_id,
       `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
@@ -595,12 +595,6 @@ export async function createAdminLeave(req, res) {
     // 3. Broadcast Notification to ALL active employees
     // We can do this with a single INSERT ... SELECT query for efficiency
     const message = `Admin ${req.user.name || 'Administrator'} is on leave from ${formatDate(start)} to ${formatDate(end)}.`;
-
-    await db.execute(
-      `INSERT INTO notifications (user_id, message) 
-       SELECT id, ? FROM employees WHERE status = 'active'`,
-      [message]
-    );
 
     // 3. Log Audit
     await logAudit(adminId, 'admin_leave_broadcast', {
@@ -772,7 +766,7 @@ export async function createApprovedLeave(req, res) {
       [employeeId, leaveType, start_date, end_date, reason, req.user.id]
     );
 
-    // Notification
+    // 4. Individual Notification
     const typeLabel = leaveType.charAt(0).toUpperCase() + leaveType.slice(1);
     await createNotification(
       employeeId,
@@ -880,6 +874,33 @@ export async function changeAdminPassword(req, res) {
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to change password' });
+  }
+}
+
+export async function resetUserPassword(req, res) {
+  try {
+    const { employeeId, newPassword } = req.body;
+    if (!employeeId || !newPassword) {
+      return res.status(400).json({ error: 'Employee ID and new password are required' });
+    }
+
+    const newHash = await hashPassword(newPassword);
+    const [result] = await db.execute(
+      'UPDATE employees SET password_hash = ? WHERE id = ?',
+      [newHash, employeeId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await logAudit(req.user.id, 'user_password_reset_by_admin', { target_id: employeeId });
+    await createNotification(employeeId, 'Your password has been reset by the administrator.');
+
+    res.json({ message: 'User password reset successfully' });
+  } catch (error) {
+    console.error('Reset user password error:', error);
+    res.status(500).json({ error: 'Failed to reset user password' });
   }
 }
 
@@ -1137,7 +1158,7 @@ export async function updateLeavePolicyByType(req, res) {
     const { type } = req.params;
     const { total_days } = req.body;
 
-    if (!['sick', 'casual', 'paid'].includes(type)) {
+    if (!['sick', 'casual', 'paid', 'work_from_home'].includes(type)) {
       return res.status(400).json({ error: 'Invalid leave type' });
     }
 

@@ -33,7 +33,24 @@ export async function previewCarryForward(req, res) {
         const previewData = [];
 
         for (const employee of employees) {
-            // Try fetching stored balances
+            // First, check if carry forward already exists for the TARGET year
+            const [existingCarryForward] = await db.execute(
+                'SELECT leave_type, carried_forward FROM leave_balances WHERE user_id = ? AND year = ? AND carried_forward > 0',
+                [employee.id, to]
+            );
+
+            let carriedValues = { sick: 0, casual: 0, paid: 0 };
+
+            if (existingCarryForward.length > 0) {
+                // Use existing confirmed carry forward values
+                existingCarryForward.forEach(b => {
+                    if (carriedValues[b.leave_type] !== undefined) {
+                        carriedValues[b.leave_type] = b.carried_forward;
+                    }
+                });
+            }
+
+            // Try fetching stored balances from SOURCE year for remaining calculation
             const [balances] = await db.execute(
                 'SELECT leave_type, remaining_days FROM leave_balances WHERE user_id = ? AND year = ?',
                 [employee.id, from]
@@ -69,6 +86,13 @@ export async function previewCarryForward(req, res) {
                 });
             }
 
+            // If carry forward exists, use those values; otherwise use calculated remaining
+            const finalCarried = {
+                sick: existingCarryForward.length > 0 ? carriedValues.sick : balanceMap.sick,
+                casual: existingCarryForward.length > 0 ? carriedValues.casual : balanceMap.casual,
+                planned: existingCarryForward.length > 0 ? carriedValues.paid : balanceMap.paid
+            };
+
             previewData.push({
                 employee_id: employee.id,
                 employee_name: employee.name,
@@ -78,11 +102,7 @@ export async function previewCarryForward(req, res) {
                     casual: balanceMap.casual,
                     planned: balanceMap.paid
                 },
-                carried: {
-                    sick: balanceMap.sick,
-                    casual: balanceMap.casual,
-                    planned: balanceMap.paid
-                }
+                carried: finalCarried
             });
         }
 
@@ -114,19 +134,7 @@ export async function confirmCarryForward(req, res) {
         const from = parseInt(fromYear, 10);
         const to = parseInt(toYear, 10);
 
-        // Check if carry forward already done
-        const [existing] = await db.execute(
-            'SELECT COUNT(*) as count FROM leave_balances WHERE year = ? AND carried_forward > 0',
-            [to]
-        );
-
-        if (existing[0].count > 0) {
-            return res.status(400).json({
-                error: `Carry forward already completed for year ${to}`,
-                existingCount: existing[0].count,
-                message: 'Use manual override to edit individual records if needed'
-            });
-        }
+        // Allow re-running carry forward - ON DUPLICATE KEY UPDATE will handle existing records
 
         // Get all active employees
         const [employees] = await db.execute(

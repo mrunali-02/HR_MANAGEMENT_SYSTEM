@@ -147,6 +147,7 @@ function AdminDashboard() {
     plannedLeave: 0,
     casualLeave: 0,
     sickLeave: 0,
+    wfhLeave: 0,
     year: new Date().getFullYear(),
   });
   const [selectedLeave, setSelectedLeave] = useState(null);
@@ -178,6 +179,9 @@ function AdminDashboard() {
     endDate: '',
     reason: ''
   });
+
+  const [resetPasswordModal, setResetPasswordModal] = useState({ open: false, employeeId: null, employeeName: '' });
+  const [adminNewPassword, setAdminNewPassword] = useState('');
 
   // Leave Policies State
   const [leavePolicies, setLeavePolicies] = useState({
@@ -475,6 +479,7 @@ function AdminDashboard() {
         plannedLeave: 0,
         casualLeave: 0,
         sickLeave: 0,
+        wfhLeave: 0,
         year: new Date().getFullYear(),
       });
     } catch (err) {
@@ -870,7 +875,8 @@ function AdminDashboard() {
       setLeavePolicies({
         sick: policiesMap.sick || 6,
         casual: policiesMap.casual || 6,
-        paid: policiesMap.paid || 12
+        paid: policiesMap.paid || 12,
+        work_from_home: policiesMap.work_from_home || 0
       });
     } catch (err) {
       console.error('Error fetching leave policies:', err);
@@ -895,6 +901,10 @@ function AdminDashboard() {
         ),
         axios.put(`${API_BASE_URL}/admin/leave-policies/type/paid`,
           { total_days: leavePolicies.paid },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        axios.put(`${API_BASE_URL}/admin/leave-policies/type/work_from_home`,
+          { total_days: leavePolicies.work_from_home },
           { headers: { Authorization: `Bearer ${token}` } }
         )
       ]);
@@ -1100,6 +1110,28 @@ function AdminDashboard() {
         delete newState[TABS.EMPLOYEES];
         return newState;
       }), 5000);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!adminNewPassword || adminNewPassword.length < 4) {
+      alert('Password must be at least 4 characters long');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_BASE_URL}/admin/employees/${resetPasswordModal.employeeId}/reset-password`,
+        { employeeId: resetPasswordModal.employeeId, newPassword: adminNewPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTabSuccess({ [TABS.EMPLOYEES]: `Password reset successfully for ${resetPasswordModal.employeeName}` });
+      setResetPasswordModal({ open: false, employeeId: null, employeeName: '' });
+      setAdminNewPassword('');
+      setTimeout(() => setTabSuccess({}), 3000);
+    } catch (err) {
+      setTabErrors({ [TABS.EMPLOYEES]: err.response?.data?.error || 'Failed to reset password' });
+      setTimeout(() => setTabErrors({}), 5000);
     }
   };
 
@@ -1745,14 +1777,22 @@ function AdminDashboard() {
                       {formatDate(u.created_at)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-right text-sm">
-                      {u.id !== user?.id && (
+                      <div className="flex justify-end gap-3">
                         <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="text-red-600 hover:text-red-900"
+                          onClick={() => setResetPasswordModal({ open: true, employeeId: u.id, employeeName: u.name || u.email })}
+                          className="text-indigo-600 hover:text-indigo-900 font-medium"
                         >
-                          Delete
+                          Reset Password
                         </button>
-                      )}
+                        {u.id !== user?.id && (
+                          <button
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="text-red-600 hover:text-red-900 font-medium"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1770,6 +1810,48 @@ function AdminDashboard() {
             </table>
           </div>
         </div >
+
+        {/* Reset Password Modal */}
+        {resetPasswordModal.open && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+              <div className="bg-indigo-600 px-6 py-4">
+                <h3 className="text-xl font-bold text-white">Reset Password</h3>
+                <p className="text-indigo-100 text-sm opacity-90">Resetting password for {resetPasswordModal.employeeName}</p>
+              </div>
+              <div className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
+                  <input
+                    type="password"
+                    className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder-gray-400"
+                    placeholder="Enter new 4+ character password"
+                    value={adminNewPassword}
+                    onChange={(e) => setAdminNewPassword(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                  <button
+                    onClick={() => {
+                      setResetPasswordModal({ open: false, employeeId: null, employeeName: '' });
+                      setAdminNewPassword('');
+                    }}
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleResetPassword}
+                    className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-200 transition-all"
+                  >
+                    Update Password
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1825,7 +1907,7 @@ function AdminDashboard() {
               <div className="text-2xl font-bold text-orange-800 mt-1">{leaveStatistics.sickLeave}</div>
             </div>
             <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-              <div className="text-sm text-purple-600 font-medium">Work From Home</div>
+              <div className="text-sm text-purple-600 font-medium">Work From Home"</div>
               <div className="text-2xl font-bold text-purple-800 mt-1">{leaveStatistics.wfhLeave || 0}</div>
             </div>
           </div>

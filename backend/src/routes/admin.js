@@ -52,6 +52,7 @@ import {
   exportLeaves,
   exportWorkHoursExcel,
   createAdminLeave,
+  resetUserPassword,
 } from '../controllers/adminController.js';
 
 // Carry Forward imports
@@ -81,6 +82,7 @@ router.post('/employees', addEmployee);
 router.put('/employees/:id', updateEmployee);
 router.get('/users', getUsers);
 router.delete('/users/:id', deleteUser);
+router.put('/employees/:id/reset-password', resetUserPassword);
 
 // Leave Management
 router.get('/leave-requests', authToken, requireRole('admin'), getLeaveRequests);

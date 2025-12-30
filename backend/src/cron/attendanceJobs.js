@@ -1,6 +1,13 @@
 import cron from 'node-cron';
 import db from '../db/db.js';
-import { logAudit } from '../utils/audit.js';
+import { logAudit, createNotification } from '../utils/audit.js';
+
+const formatDate = (dateValue) => {
+    if (!dateValue) return null;
+    if (typeof dateValue === 'string') return dateValue.substring(0, 10);
+    const iso = dateValue.toISOString();
+    return iso.substring(0, 10);
+};
 
 export const initAttendanceCron = () => {
     // Schedule task to run at 7:00 PM (19:00) every day
@@ -151,6 +158,60 @@ export const initAttendanceCron = () => {
             }
         } catch (error) {
             console.error('Error running auto-checkout:', error);
+        }
+    });
+
+    // Schedule Team Absence Alerts at 8:00 AM every day
+    cron.schedule('0 8 * * *', async () => {
+        console.log('Running daily team absence alerts...');
+        try {
+            // Find all approved leaves active today
+            const [leavesToday] = await db.execute(`
+                SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.name, e.manager_id
+                FROM leave_requests lr
+                JOIN employees e ON lr.user_id = e.id
+                WHERE lr.status = 'approved'
+                  AND CURDATE() BETWEEN lr.start_date AND lr.end_date
+            `);
+
+            console.log(`Found ${leavesToday.length} leaves starting today.`);
+
+            for (const leave of leavesToday) {
+                const { user_id, type, start_date, end_date, name: applicantName, manager_id: applicantManagerId } = leave;
+
+                // Identify Team to notify
+                const recipients = new Set();
+
+                // 1. Notify Manager
+                if (applicantManagerId) {
+                    recipients.add(applicantManagerId);
+                }
+
+                // 2. Notify Subordinates (if this person is a manager)
+                const [subordinates] = await db.execute(
+                    'SELECT id FROM employees WHERE manager_id = ? AND id != ?',
+                    [user_id, user_id]
+                );
+                subordinates.forEach(s => recipients.add(s.id));
+
+                // 3. Notify Colleagues (same manager)
+                if (applicantManagerId) {
+                    const [colleagues] = await db.execute(
+                        'SELECT id FROM employees WHERE manager_id = ? AND id != ?',
+                        [applicantManagerId, user_id]
+                    );
+                    colleagues.forEach(c => recipients.add(c.id));
+                }
+
+                const notificationMessage = `Team Alert: ${applicantName} is absent today (until ${formatDate(end_date)}) due to approved ${type} leave.`;
+
+                for (const recipientId of recipients) {
+                    await createNotification(recipientId, notificationMessage);
+                }
+            }
+            console.log('Daily team absence alerts completed.');
+        } catch (error) {
+            console.error('Error running team absence alerts:', error);
         }
     });
 

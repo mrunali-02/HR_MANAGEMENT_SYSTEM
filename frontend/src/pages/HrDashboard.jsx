@@ -100,6 +100,12 @@ function HrDashboard() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [myLeaveBalance, setMyLeaveBalance] = useState(null);
+  const [myLeavePolicies, setMyLeavePolicies] = useState({
+    sick: 6,
+    casual: 6,
+    paid: 12,
+    work_from_home: 0
+  });
   const [checkoutMarked, setCheckoutMarked] = useState(false);
 
   // Settings State
@@ -290,7 +296,11 @@ function HrDashboard() {
       const res = await axios.get(`${API_BASE_URL}/employee/${user.id}/leave-balance`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMyLeaveBalance(res.data);
+      const data = res.data || {};
+      setMyLeaveBalance(data);
+      if (data.policies) {
+        setMyLeavePolicies(data.policies);
+      }
     } catch (err) {
       console.error('Error fetching leave balance:', err);
     }
@@ -941,15 +951,15 @@ function HrDashboard() {
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center">
               <div className="text-2xl font-bold text-primary">{myLeaveBalance?.sick ?? '-'}</div>
-              <div className="text-xs text-secondary">Sick</div>
+              <div className="text-xs text-secondary">Sick ({myLeavePolicies.sick})</div>
             </div>
             <div className="text-center border-l border-gray-200">
               <div className="text-2xl font-bold text-primary">{myLeaveBalance?.casual ?? '-'}</div>
-              <div className="text-xs text-secondary">Casual</div>
+              <div className="text-xs text-secondary">Casual ({myLeavePolicies.casual})</div>
             </div>
             <div className="text-center border-l border-gray-200">
               <div className="text-2xl font-bold text-primary">{myLeaveBalance?.paid ?? '-'}</div>
-              <div className="text-xs text-secondary">Planned</div>
+              <div className="text-xs text-secondary">Planned ({myLeavePolicies.paid})</div>
             </div>
           </div>
         </div>
@@ -957,11 +967,6 @@ function HrDashboard() {
         <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
           <div className="text-sm font-medium opacity-90 uppercase tracking-wider text-secondary">Pending Leaves</div>
           <div className="text-4xl font-extrabold mt-2 text-primary">{dashboardSummary?.totals?.pendingLeaveRequests || 0}</div>
-        </div>
-
-        <div className="bg-white border-l-4 border-[color:var(--status-inactive)] p-6 rounded-xl shadow-sm card-hover">
-          <div className="text-sm font-semibold text-secondary uppercase tracking-wider">Pending Corrections</div>
-          <div className="text-3xl font-bold text-primary mt-2">{dashboardSummary?.totals?.pendingAttendanceCorrections || 0}</div>
         </div>
 
       </div>
@@ -1489,7 +1494,7 @@ function HrDashboard() {
               {myLeaveHistory.length === 0 && <tr><td colSpan="4" className="px-4 py-4 text-center text-gray-500">No leaves found.</td></tr>}
               {myLeaveHistory.map(l => (
                 <tr key={l.id}>
-                  <td className="px-4 py-2 capitalize">{l.type}</td>
+                  <td className="px-4 py-2 capitalize">{l.type === 'paid' ? 'Planned' : l.type.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-2">{formatDate(l.start_date)} to {formatDate(l.end_date)} <span className="text-gray-400 text-xs ml-1">({l.days} days)</span></td>
                   <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs font-bold ${l.status === 'approved' ? 'bg-green-100 text-green-800' : l.status === 'rejected' ? 'bg-red-100 text-red-800' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100'}`}>{l.status}</span></td>
                   <td className="px-4 py-2">{l.status === 'pending' && <button onClick={() => handleCancelMyLeave(l.id)} className="text-red-600 text-sm hover:underline">Cancel</button>}</td>
