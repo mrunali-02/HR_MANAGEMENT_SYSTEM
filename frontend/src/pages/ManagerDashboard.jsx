@@ -893,30 +893,7 @@ function ManagerDashboard() {
   // ---------- MY LEAVE HANDLERS (Same as HR/Employee) ----------
 
   const handleMyLeaveFormChange = (field, value) => {
-    if (field === 'startDate' || field === 'endDate') {
-      const dateObj = new Date(value);
-      const day = dateObj.getDay();
-      if (day === 0 || day === 6) {
-        alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
-        return;
-      }
-
-      const isHoliday = holidays.some(h => {
-        let hDate = h.date;
-        if (typeof h.date === 'string') {
-          const d = new Date(h.date);
-          const year = d.getFullYear();
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          hDate = `${year}-${month}-${day}`;
-        }
-        return hDate === value;
-      });
-      if (isHoliday) {
-        alert('Selected date is a holiday.');
-        return;
-      }
-    }
+    // Date validation removed - managers can now apply for leave on any date including weekends and holidays
     if (field === 'type' && ['casual', 'paid'].includes(value)) {
       setMyLeaveForm(prev => ({ ...prev, [field]: value, document: null }));
       return;

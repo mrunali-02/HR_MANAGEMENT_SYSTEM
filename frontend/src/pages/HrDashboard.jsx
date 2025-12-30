@@ -743,30 +743,7 @@ function HrDashboard() {
   /* ---------- My leave form handlers ---------- */
 
   const handleMyLeaveFormChange = (field, value) => {
-    if (field === 'startDate' || field === 'endDate') {
-      const dateObj = new Date(value);
-      const day = dateObj.getDay();
-      if (day === 0 || day === 6) {
-        alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
-        return;
-      }
-
-      const isHoliday = holidays.some(h => {
-        let hDate = h.date;
-        if (typeof h.date === 'string') {
-          const d = new Date(h.date);
-          const year = d.getFullYear();
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          hDate = `${year}-${month}-${day}`;
-        }
-        return hDate === value;
-      });
-      if (isHoliday) {
-        alert('Selected date is a holiday.');
-        return;
-      }
-    }
+    // Date validation removed - HR can now apply for leave on any date including weekends and holidays
     if (field === 'type' && ['casual', 'paid'].includes(value)) {
       setMyLeaveForm(prev => ({ ...prev, [field]: value, document: null }));
       return;
@@ -1760,13 +1737,7 @@ function HrDashboard() {
     e.preventDefault();
     if (!quickLeaveModal.employeeId) return;
 
-    // [NEW] Validate weekends
-    const startD = new Date(quickLeaveModal.startDate);
-    const endD = new Date(quickLeaveModal.endDate);
-    if (startD.getDay() === 0 || startD.getDay() === 6 || endD.getDay() === 0 || endD.getDay() === 6) {
-      alert('Weekends (Saturday/Sunday) cannot be selected for leave.');
-      return;
-    }
+    // Date validation removed - HR can create approved leaves on any date including weekends
 
     try {
       const token = localStorage.getItem('token');

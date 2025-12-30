@@ -39,6 +39,7 @@ const TABS = {
 const SETTINGS_TABS = {
   ACCOUNT: 'account',
   SECURITY: 'security',
+  LEAVE_POLICIES: 'leavePolicies',
 };
 
 function AdminDashboard() {
@@ -178,6 +179,14 @@ function AdminDashboard() {
     reason: ''
   });
 
+  // Leave Policies State
+  const [leavePolicies, setLeavePolicies] = useState({
+    sick: 6,
+    casual: 6,
+    paid: 12
+  });
+  const [leavePoliciesLoading, setLeavePoliciesLoading] = useState(false);
+
   const handleSettingChange = (category, field, value) => {
     setSettings(prev => ({
       ...prev,
@@ -229,7 +238,8 @@ function AdminDashboard() {
       fetchDashboardSummary(),
       fetchNotes(),
       fetchHolidays(),
-      fetchMyAttendance()
+      fetchMyAttendance(),
+      fetchLeavePolicies()
     ]).finally(() => {
       setLoading(false);
     });
@@ -839,6 +849,64 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Error deleting note:', err);
       alert(err.response?.data?.error || 'Failed to delete note');
+    }
+  };
+
+  // Fetch Leave Policies
+  const fetchLeavePolicies = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/admin/leave-policies`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const policies = response.data.policies || [];
+      const policiesMap = {};
+
+      policies.forEach(policy => {
+        policiesMap[policy.type] = policy.total_days;
+      });
+
+      setLeavePolicies({
+        sick: policiesMap.sick || 6,
+        casual: policiesMap.casual || 6,
+        paid: policiesMap.paid || 12
+      });
+    } catch (err) {
+      console.error('Error fetching leave policies:', err);
+    }
+  };
+
+  // Save Leave Policies
+  const saveLeavePolicies = async () => {
+    setLeavePoliciesLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+
+      // Update each leave type
+      await Promise.all([
+        axios.put(`${API_BASE_URL}/admin/leave-policies/type/sick`,
+          { total_days: leavePolicies.sick },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        axios.put(`${API_BASE_URL}/admin/leave-policies/type/casual`,
+          { total_days: leavePolicies.casual },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        axios.put(`${API_BASE_URL}/admin/leave-policies/type/paid`,
+          { total_days: leavePolicies.paid },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      ]);
+
+      setTabSuccess({ [TABS.SETTINGS]: 'Leave policies updated successfully!' });
+      setTimeout(() => setTabSuccess({}), 3000);
+    } catch (err) {
+      console.error('Error saving leave policies:', err);
+      setTabErrors({ [TABS.SETTINGS]: 'Failed to save leave policies' });
+      setTimeout(() => setTabErrors({}), 5000);
+    } finally {
+      setLeavePoliciesLoading(false);
     }
   };
 
@@ -1548,10 +1616,9 @@ function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Nationality <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700">Nationality <span className="text-gray-400 text-xs">(Optional)</span></label>
                   <input
                     type="text"
-                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={formData.nationality}
                     onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
@@ -2382,6 +2449,68 @@ function AdminDashboard() {
       </div>
     );
 
+    const renderLeavePoliciesSettings = () => (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Universal Leave Allocation</h3>
+        <div className="bg-white rounded-xl border p-6 space-y-4">
+          <p className="text-sm text-gray-600 mb-4">
+            Configure the default number of leaves allocated to all employees annually.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Sick Leaves</label>
+              <input
+                type="number"
+                min="0"
+                max="365"
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={leavePolicies.sick}
+                onChange={(e) => setLeavePolicies({ ...leavePolicies, sick: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Casual Leaves</label>
+              <input
+                type="number"
+                min="0"
+                max="365"
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={leavePolicies.casual}
+                onChange={(e) => setLeavePolicies({ ...leavePolicies, casual: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Planned Leaves</label>
+              <input
+                type="number"
+                min="0"
+                max="365"
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={leavePolicies.paid}
+                onChange={(e) => setLeavePolicies({ ...leavePolicies, paid: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm font-medium text-gray-700">
+              Total Annual Leaves: <span className="text-indigo-600 font-bold text-xl">{leavePolicies.sick + leavePolicies.casual + leavePolicies.paid}</span>
+            </p>
+          </div>
+
+          <button
+            onClick={saveLeavePolicies}
+            disabled={leavePoliciesLoading}
+            className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {leavePoliciesLoading ? 'Saving...' : 'Save Leave Policies'}
+          </button>
+        </div>
+      </div>
+    );
+
     return (
       <div className="flex flex-col lg:flex-row gap-6 h-full">
         {/* Settings Navigation Sidebar */}
@@ -2393,6 +2522,7 @@ function AdminDashboard() {
             {Object.entries({
               [SETTINGS_TABS.ACCOUNT]: 'Account & Profile',
               [SETTINGS_TABS.SECURITY]: 'Security',
+              [SETTINGS_TABS.LEAVE_POLICIES]: 'Leave Policies',
             }).map(([key, label]) => (
               <button
                 key={key}
@@ -2423,6 +2553,7 @@ function AdminDashboard() {
 
           {settingsActiveTab === SETTINGS_TABS.ACCOUNT && renderAccountSettings()}
           {settingsActiveTab === SETTINGS_TABS.SECURITY && renderSecuritySettings()}
+          {settingsActiveTab === SETTINGS_TABS.LEAVE_POLICIES && renderLeavePoliciesSettings()}
         </div>
       </div>
     );

@@ -6,8 +6,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 function LeaveCarryForward() {
     const currentYear = new Date().getFullYear();
 
-    const [fromYear, setFromYear] = useState(currentYear - 1);
-    const [toYear, setToYear] = useState(currentYear);
+    // Default to 2025 -> 2026 for initial carry forward, or current year if we're past 2025
+    const defaultFromYear = Math.max(2025, currentYear - 1);
+    const defaultToYear = Math.max(2026, currentYear);
+
+    const [fromYear, setFromYear] = useState(defaultFromYear);
+    const [toYear, setToYear] = useState(defaultToYear);
     const [previewData, setPreviewData] = useState([]);
     const [showPreview, setShowPreview] = useState(false);
     const [status, setStatus] = useState(null);
@@ -120,7 +124,8 @@ function LeaveCarryForward() {
     };
 
     const yearOptions = [];
-    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+    const startYear = 2025; // Start from 2025
+    for (let y = startYear; y <= currentYear + 5; y++) {
         yearOptions.push(y);
     }
 

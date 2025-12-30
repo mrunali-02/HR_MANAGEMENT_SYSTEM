@@ -436,32 +436,7 @@ function EmployeeDashboard() {
       return;
     }
 
-    // [NEW] Validate weekends and holidays on submission
-    const validateDate = (dateStr) => {
-      const d = new Date(dateStr);
-      const day = d.getDay();
-      if (day === 0) return 'Sundays cannot be selected for leave.';
-
-      const isHoliday = holidays.some(h => {
-        let hDate = h.date;
-        if (typeof h.date === 'string') {
-          const hd = new Date(h.date);
-          const year = hd.getFullYear();
-          const month = String(hd.getMonth() + 1).padStart(2, '0');
-          const day = String(hd.getDate()).padStart(2, '0');
-          hDate = `${year}-${month}-${day}`;
-        }
-        return hDate === dateStr;
-      });
-      if (isHoliday) return 'Selected date is a holiday marked by HR/Admin.';
-      return null;
-    };
-
-    const startError = validateDate(leaveForm.startDate);
-    if (startError) { setError(`Start Date: ${startError}`); return; }
-
-    const endError = validateDate(leaveForm.endDate);
-    if (endError) { setError(`End Date: ${endError}`); return; }
+    // Date validation removed - users can now apply for leave on any date including weekends and holidays
 
     setLeaveSubmitting(true);
     try {
