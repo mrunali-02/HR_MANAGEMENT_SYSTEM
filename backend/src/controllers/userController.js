@@ -339,10 +339,13 @@ export async function getLeaveBalance(req, res) {
       base.total += policy.total_days;
     });
 
+    // Only count approved leaves from 2025 onwards (ignore historical leaves before 2025)
     const [usedRows] = await db.execute(
       `SELECT type, COALESCE(SUM(DATEDIFF(end_date, start_date) + 1), 0) AS days
        FROM leave_requests
-       WHERE user_id = ? AND status = 'approved'
+       WHERE user_id = ? 
+       AND status = 'approved'
+       AND YEAR(start_date) >= 2025
        GROUP BY type`,
       [userId]
     );

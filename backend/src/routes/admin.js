@@ -31,6 +31,7 @@ import {
   getLeavePolicies,
   createLeavePolicy,
   updateLeavePolicy,
+  updateLeavePolicyByType,
   deleteLeavePolicy,
   // Attendance Corrections
   getAttendanceCorrections,
@@ -112,6 +113,7 @@ router.delete('/holidays/:id', authToken, requireRole('admin'), deleteHoliday);
 router.get('/leave-policies', authToken, requireRole('admin'), getLeavePolicies);
 router.post('/leave-policies', authToken, requireRole('admin'), createLeavePolicy);
 router.put('/leave-policies/:id', authToken, requireRole('admin'), updateLeavePolicy);
+router.put('/leave-policies/type/:type', authToken, requireRole('admin'), updateLeavePolicyByType);
 router.delete('/leave-policies/:id', authToken, requireRole('admin'), deleteLeavePolicy);
 
 // Attendance Corrections

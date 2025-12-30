@@ -1132,6 +1132,32 @@ export async function updateLeavePolicy(req, res) {
   }
 }
 
+export async function updateLeavePolicyByType(req, res) {
+  try {
+    const { type } = req.params;
+    const { total_days } = req.body;
+
+    if (!['sick', 'casual', 'paid'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid leave type' });
+    }
+
+    if (total_days === undefined || total_days < 0) {
+      return res.status(400).json({ error: 'Invalid total_days value' });
+    }
+
+    await db.execute(
+      'UPDATE leave_policies SET total_days = ? WHERE type = ?',
+      [total_days, type]
+    );
+
+    await logAudit(req.user.id, 'leave_policy_updated', { type, total_days });
+    res.json({ message: `${type} leave policy updated successfully`, type, total_days });
+  } catch (error) {
+    console.error('Update leave policy by type error:', error);
+    res.status(500).json({ error: 'Failed to update leave policy' });
+  }
+}
+
 export async function deleteLeavePolicy(req, res) {
   try {
     const { id } = req.params;
