@@ -38,7 +38,7 @@ async function runMigration() {
         INSERT INTO leave_policies (name, type, total_days, carry_forward) 
         VALUES ('Work From Home', 'work_from_home', 100, 0)
       `);
-            console.log('✓ Inserted default Work From Home policy (10 days)');
+            console.log('✓ Inserted default Work From Home policy (100 days)');
         } else {
             console.log('✓ Work From Home policy already exists');
         }

@@ -308,7 +308,7 @@ async function migrate() {
         days INT DEFAULT 0,
         reason TEXT,
         document_url VARCHAR(500),
-        status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+        status ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
         reviewed_by INT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
@@ -404,6 +404,21 @@ async function migrate() {
       });
     } catch (err) {
       console.log('Note: leave_balances carried_forward migration check failed or already exists', err.message);
+    }
+
+    // Migration update: Add index to leave_balances
+    try {
+      await connection.execute(`
+          SELECT count(*) FROM information_schema.STATISTICS 
+          WHERE (TABLE_SCHEMA = '${process.env.DB_NAME || 'hr_management'}' AND TABLE_NAME = 'leave_balances' AND INDEX_NAME = 'idx_leave_balances_year_cf')
+        `).then(async ([rows]) => {
+        if (rows[0]['count(*)'] === 0) {
+          await connection.execute("CREATE INDEX idx_leave_balances_year_cf ON leave_balances(year, carried_forward)");
+          console.log('✓ Added index idx_leave_balances_year_cf to leave_balances');
+        }
+      });
+    } catch (err) {
+      console.log('Note: leave_balances index migration check failed or already exists', err.message);
     }
 
     // Create work_hours table
