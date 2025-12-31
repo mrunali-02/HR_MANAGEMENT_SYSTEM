@@ -1,5 +1,5 @@
 import db from '../db/db.js';
-import { logAudit, createNotification } from '../utils/audit.js';
+import { logAudit, createNotification, broadcastNotification } from '../utils/audit.js';
 
 const formatDate = (dateValue) => {
   if (!dateValue) return null;
@@ -329,19 +329,18 @@ export async function approveTeamLeave(req, res) {
 
     // Fetch details for notification
     const [leaveRequest] = await db.execute(
-      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
+      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, lr.working_start_date, lr.working_end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
        JOIN employees e ON lr.user_id = e.id 
        WHERE lr.id = ?`,
       [leaveId]
     );
 
     if (leaveRequest.length > 0) {
-      const { user_id, type, start_date, end_date, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
+      const { user_id, type, start_date, end_date, working_start_date, working_end_date, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
 
-      // 1. Notify Requester
-      await createNotification(
-        user_id,
-        `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved by your manager.`
+      // 1. Broadcast Notification to all staff
+      await broadcastNotification(
+        `${applicantName}'s ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
       );
 
       // 3. Log Audit
@@ -349,6 +348,49 @@ export async function approveTeamLeave(req, res) {
         leave_id: leaveId,
         applicant_id: user_id
       });
+
+      // 4. Auto-mark attendance if Work From Home or Comp off
+      if (type === 'work_from_home' || type === 'comp_off') {
+        const isCompOff = type === 'comp_off';
+        const start = isCompOff ? new Date(working_start_date) : new Date(start_date);
+        const end = isCompOff ? new Date(working_end_date) : new Date(end_date);
+        const statusValue = isCompOff ? 'comp_off' : 'remote';
+
+        // Loop through dates
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          // Normalize to noon to avoid timezone shifts when calling toISOString
+          const tempDate = new Date(d);
+          tempDate.setHours(12, 0, 0, 0);
+          const dateStr = tempDate.toISOString().split('T')[0];
+
+          try {
+            await db.execute(
+              `INSERT IGNORE INTO attendance (user_id, attendance_date, status, check_in_time, check_out_time, created_at)
+               VALUES (?, ?, ?, '10:00:00', '19:00:00', NOW())`,
+              [user_id, dateStr, statusValue]
+            );
+
+            // Fetch the ID of the inserted/existing attendance
+            const [attRows] = await db.execute('SELECT id FROM attendance WHERE user_id=? AND attendance_date=?', [user_id, dateStr]);
+            if (attRows.length > 0) {
+              const attId = attRows[0].id;
+              await db.execute(
+                `INSERT IGNORE INTO work_hours (user_id, attendance_id, work_date, check_in_time, check_out_time, total_hours)
+                  VALUES (?, ?, ?, '10:00:00', '19:00:00', 9)`,
+                [user_id, attId, dateStr]
+              );
+
+              await logAudit(managerId, `${type}_attendance_auto_marked_by_manager`, {
+                employee_id: user_id,
+                date: dateStr,
+                leave_type: type
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to auto-mark ${type} attendance (manager) for ${dateStr}:`, err);
+          }
+        }
+      }
     }
 
     res.json({ message: 'Leave approved' });

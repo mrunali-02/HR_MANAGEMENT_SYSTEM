@@ -391,6 +391,7 @@ export async function getLeaveBalance(req, res) {
        FROM leave_requests
        WHERE user_id = ? 
        AND status = 'approved'
+       AND type != 'comp_off'
        AND YEAR(start_date) >= 2025
        GROUP BY type`,
       [userId]
@@ -443,11 +444,15 @@ export async function createLeaveRequest(req, res) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { type, start_date, end_date, reason } = req.body;
+    const { type, start_date, end_date, reason, working_start_date, working_end_date } = req.body;
     const documentUrl = req.file ? req.file.path : null;
 
     if (!type || !start_date || !end_date || !reason) {
       return res.status(400).json({ error: 'Missing leave details' });
+    }
+
+    if (type === 'comp_off' && (!working_start_date || !working_end_date)) {
+      return res.status(400).json({ error: 'Working dates are required for Comp off' });
     }
 
     const start = new Date(start_date);
@@ -487,8 +492,31 @@ export async function createLeaveRequest(req, res) {
     // Ensure we don't have negative days if user selected only holidays (frontend should prevent this, but safe backend)
     const diffDays = Math.max(0, totalDays - holidayCount);
 
-    if (diffDays === 0) {
+    if (diffDays === 0 && type !== 'comp_off') {
       return res.status(400).json({ error: 'Selected range consists only of holidays.' });
+    }
+
+    // Comp off specific validation: gap parity
+    if (type === 'comp_off') {
+      const wStart = new Date(working_start_date);
+      const wEnd = new Date(working_end_date);
+      wStart.setHours(12, 0, 0, 0);
+      wEnd.setHours(12, 0, 0, 0);
+
+      if (Number.isNaN(wStart.getTime()) || Number.isNaN(wEnd.getTime())) {
+        return res.status(400).json({ error: 'Invalid working dates' });
+      }
+
+      const wDiffTime = Math.abs(wEnd - wStart);
+      const wTotalDays = Math.ceil(wDiffTime / (1000 * 60 * 60 * 24)) + 1;
+
+      // For comp off, we compare total duration (including holidays/weekends)
+      // to allow earning comp off by working on holidays/weekends.
+      if (totalDays !== wTotalDays) {
+        return res.status(400).json({
+          error: `Leave duration (${totalDays} days) must match working duration (${wTotalDays} days).`
+        });
+      }
     }
 
     // Check for overlap
@@ -507,9 +535,9 @@ export async function createLeaveRequest(req, res) {
     }
 
     await db.execute(
-      `INSERT INTO leave_requests (user_id, type, start_date, end_date, days, reason, document_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [userId, type, start_date, end_date, diffDays, reason, documentUrl]
+      `INSERT INTO leave_requests (user_id, type, start_date, end_date, days, reason, document_url, working_start_date, working_end_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [userId, type, start_date, end_date, diffDays, reason, documentUrl, working_start_date || null, working_end_date || null]
     );
 
     await logAudit(userId, 'leave_requested', { type, start_date, end_date, days: diffDays });

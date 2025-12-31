@@ -31,7 +31,6 @@ function EmployeeDashboard() {
 
   // Leaves state
   const [leaveBalance, setLeaveBalance] = useState({
-    total: 5,
     used: 0,
     sick: 0,
     casual: 0,
@@ -44,7 +43,9 @@ function EmployeeDashboard() {
     startDate: '',
     endDate: '',
     reason: '',
-    document: null
+    document: null,
+    workingStartDate: '',
+    workingEndDate: ''
   });
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [holidays, setHolidays] = useState([]); // [NEW]
@@ -393,7 +394,7 @@ function EmployeeDashboard() {
     }
   };
 
-  const calculateLeaveDays = (start, end) => {
+  const calculateLeaveDays = (start, end, includeHolidays = false) => {
     if (!start || !end) return 0;
     const startDate = new Date(start);
     const endDate = new Date(end);
@@ -402,24 +403,28 @@ function EmployeeDashboard() {
     let count = 0;
     let cur = new Date(startDate);
     while (cur <= endDate) {
-      const year = cur.getFullYear();
-      const month = String(cur.getMonth() + 1).padStart(2, '0');
-      const day = String(cur.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      if (includeHolidays) {
+        count++;
+      } else {
+        const year = cur.getFullYear();
+        const month = String(cur.getMonth() + 1).padStart(2, '0');
+        const day = String(cur.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
 
-      const isHoliday = holidays.some(h => {
-        let hDate = h.date;
-        if (typeof h.date === 'string') {
-          const d = new Date(h.date);
-          const hYear = d.getFullYear();
-          const hMonth = String(d.getMonth() + 1).padStart(2, '0');
-          const hDay = String(d.getDate()).padStart(2, '0');
-          hDate = `${hYear}-${hMonth}-${hDay}`;
-        }
-        return hDate === dateStr;
-      });
+        const isHoliday = holidays.some(h => {
+          let hDate = h.date;
+          if (typeof h.date === 'string') {
+            const d = new Date(h.date);
+            const hYear = d.getFullYear();
+            const hMonth = String(d.getMonth() + 1).padStart(2, '0');
+            const hDay = String(d.getDate()).padStart(2, '0');
+            hDate = `${hYear}-${hMonth}-${hDay}`;
+          }
+          return hDate === dateStr;
+        });
 
-      if (!isHoliday) count++;
+        if (!isHoliday) count++;
+      }
       cur.setDate(cur.getDate() + 1);
     }
     return count;
@@ -449,6 +454,20 @@ function EmployeeDashboard() {
 
     // Date validation removed - users can now apply for leave on any date including weekends and holidays
 
+    if (leaveForm.type === 'comp_off') {
+      if (!leaveForm.workingStartDate || !leaveForm.workingEndDate) {
+        setError('Working dates are required for Comp off.');
+        return;
+      }
+      // For comp off, we compare total days (including holidays)
+      const leaveDays = calculateLeaveDays(leaveForm.startDate, leaveForm.endDate, true);
+      const workingDays = calculateLeaveDays(leaveForm.workingStartDate, leaveForm.workingEndDate, true);
+      if (leaveDays !== workingDays) {
+        setError(`Leave duration (${leaveDays} days) must match working duration (${workingDays} days).`);
+        return;
+      }
+    }
+
     setLeaveSubmitting(true);
     try {
       const token = localStorage.getItem('token');
@@ -457,6 +476,10 @@ function EmployeeDashboard() {
       formData.append('start_date', leaveForm.startDate);
       formData.append('end_date', leaveForm.endDate);
       formData.append('reason', leaveForm.reason);
+      if (leaveForm.type === 'comp_off') {
+        formData.append('working_start_date', leaveForm.workingStartDate);
+        formData.append('working_end_date', leaveForm.workingEndDate);
+      }
       if (leaveForm.document) {
         formData.append('document', leaveForm.document);
       }
@@ -476,7 +499,15 @@ function EmployeeDashboard() {
         setSuccess('Leave applied successfully!');
         setTimeout(() => setSuccess(''), 3000);
       }
-      setLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '', document: null });
+      setLeaveForm({
+        type: 'sick',
+        startDate: '',
+        endDate: '',
+        reason: '',
+        document: null,
+        workingStartDate: '',
+        workingEndDate: ''
+      });
 
       // refresh leave history + balance
       const headers = { Authorization: `Bearer ${token}` };
@@ -822,15 +853,15 @@ function EmployeeDashboard() {
                   <div className="mt-4 grid grid-cols-3 gap-1 text-xs text-secondary opacity-90 font-medium">
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Planned</span>
-                      <span className="text-sm">{leavePolicies.paid}</span>
+                      <span className="text-sm">{leaveBalance.paid}/{leavePolicies.paid}</span>
                     </div>
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Casual</span>
-                      <span className="text-sm">{leavePolicies.casual}</span>
+                      <span className="text-sm">{leaveBalance.casual}/{leavePolicies.casual}</span>
                     </div>
                     <div className="flex flex-col items-center">
                       <span className="opacity-75">Sick</span>
-                      <span className="text-sm">{leavePolicies.sick}</span>
+                      <span className="text-sm">{leaveBalance.sick}/{leavePolicies.sick}</span>
                     </div>
                   </div>
                 </div>
@@ -1043,9 +1074,39 @@ function EmployeeDashboard() {
                       <option value="casual">Casual Leave</option>
                       <option value="paid">Planned Leave</option>
                       <option value="work_from_home">Work From Home</option>
+                      <option value="comp_off">Comp off</option>
                     </select>
-
                   </div>
+
+                  {leaveForm.type === 'comp_off' && (
+                    <div className="md:col-span-1 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                      <p className="text-xs text-indigo-700 font-semibold mb-2">Comp Off Working Period</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-600 uppercase mb-1">Working Start</label>
+                          <input
+                            type="date"
+                            value={leaveForm.workingStartDate}
+                            onChange={(e) => handleLeaveFormChange('workingStartDate', e.target.value)}
+                            className="w-full border border-indigo-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-600 uppercase mb-1">Working End</label>
+                          <input
+                            type="date"
+                            min={leaveForm.workingStartDate}
+                            value={leaveForm.workingEndDate}
+                            onChange={(e) => handleLeaveFormChange('workingEndDate', e.target.value)}
+                            className="w-full border border-indigo-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] mt-1 text-indigo-500 font-medium">
+                        Total Working Days: {calculateLeaveDays(leaveForm.workingStartDate, leaveForm.workingEndDate, true)}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1072,8 +1133,13 @@ function EmployeeDashboard() {
                   </div>
 
                   {leaveForm.startDate && leaveForm.endDate && (
-                    <div className="col-span-1 md:col-span-2 text-sm text-indigo-600 font-medium">
-                      Total Leave Days: {calculateLeaveDays(leaveForm.startDate, leaveForm.endDate)}
+                    <div className="col-span-1 md:col-span-2 space-y-1">
+                      <div className="text-sm text-indigo-600 font-medium">
+                        Selection: {calculateLeaveDays(leaveForm.startDate, leaveForm.endDate, true)} {calculateLeaveDays(leaveForm.startDate, leaveForm.endDate, true) === 1 ? 'day' : 'days'}
+                      </div>
+                      <div className="text-[11px] text-gray-500 italic">
+                        Net Leave Days: {calculateLeaveDays(leaveForm.startDate, leaveForm.endDate)} (Excluding holidays)
+                      </div>
                     </div>
                   )}
 

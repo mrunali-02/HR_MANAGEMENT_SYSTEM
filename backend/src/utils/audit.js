@@ -35,3 +35,22 @@ export async function createNotification(userId, message) {
   }
 }
 
+/**
+ * Create a notification for all active employees
+ * @param {string} message - Notification message
+ */
+export async function broadcastNotification(message) {
+  try {
+    // Get all employee IDs
+    const [employees] = await db.execute('SELECT id FROM employees');
+
+    if (employees.length > 0) {
+      const values = employees.map(emp => `(${emp.id}, ${db.escape(message)})`).join(',');
+      await db.execute(
+        `INSERT INTO notifications (user_id, message) VALUES ${values}`
+      );
+    }
+  } catch (error) {
+    console.error('Broadcast notification error:', error);
+  }
+}

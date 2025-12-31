@@ -148,6 +148,7 @@ function AdminDashboard() {
     casualLeave: 0,
     sickLeave: 0,
     wfhLeave: 0,
+    compOffLeave: 0,
     year: new Date().getFullYear(),
   });
   const [selectedLeave, setSelectedLeave] = useState(null);

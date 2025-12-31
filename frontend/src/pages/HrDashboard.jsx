@@ -90,7 +90,9 @@ function HrDashboard() {
     startDate: '',
     endDate: '',
     reason: '',
-    document: null
+    document: null,
+    workingStartDate: '',
+    workingEndDate: ''
   });
   const [myLeaveSubmitting, setMyLeaveSubmitting] = useState(false);
 
@@ -761,6 +763,42 @@ function HrDashboard() {
     setMyLeaveForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const calculateLeaveDays = (start, end, includeHolidays = false) => {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (endDate < startDate) return 0;
+
+    let count = 0;
+    let cur = new Date(startDate);
+    while (cur <= endDate) {
+      if (includeHolidays) {
+        count++;
+      } else {
+        const year = cur.getFullYear();
+        const month = String(cur.getMonth() + 1).padStart(2, '0');
+        const day = String(cur.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        const isHoliday = holidays.some(h => {
+          let hDate = h.date;
+          if (typeof h.date === 'string') {
+            const d = new Date(h.date);
+            const hYear = d.getFullYear();
+            const hMonth = String(d.getMonth() + 1).padStart(2, '0');
+            const hDay = String(d.getDate()).padStart(2, '0');
+            hDate = `${hYear}-${hMonth}-${hDay}`;
+          }
+          return hDate === dateStr;
+        });
+
+        if (!isHoliday) count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  };
+
   const handleApplyMyLeave = async (e) => {
     e.preventDefault();
     if (!user?.id) return;
@@ -770,6 +808,20 @@ function HrDashboard() {
       setError('Please fill all leave fields.');
       return;
     }
+
+    if (myLeaveForm.type === 'comp_off') {
+      if (!myLeaveForm.workingStartDate || !myLeaveForm.workingEndDate) {
+        setError('Working dates are required for Comp off.');
+        return;
+      }
+      // For comp off, we compare total days (including holidays)
+      const leaveDays = calculateLeaveDays(myLeaveForm.startDate, myLeaveForm.endDate, true);
+      const workingDays = calculateLeaveDays(myLeaveForm.workingStartDate, myLeaveForm.workingEndDate, true);
+      if (leaveDays !== workingDays) {
+        setError(`Leave duration (${leaveDays} days) must match working duration (${workingDays} days).`);
+        return;
+      }
+    }
     setMyLeaveSubmitting(true);
     try {
       const token = localStorage.getItem('token');
@@ -778,12 +830,24 @@ function HrDashboard() {
       formData.append('start_date', myLeaveForm.startDate);
       formData.append('end_date', myLeaveForm.endDate);
       formData.append('reason', myLeaveForm.reason);
+      if (myLeaveForm.type === 'comp_off') {
+        formData.append('working_start_date', myLeaveForm.workingStartDate);
+        formData.append('working_end_date', myLeaveForm.workingEndDate);
+      }
       if (myLeaveForm.document) formData.append('document', myLeaveForm.document);
       await axios.post(`${API_BASE_URL}/employee/${user.id}/leaves`, formData, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
       });
       setSuccess('Leave request submitted successfully!');
-      setMyLeaveForm({ type: 'sick', startDate: '', endDate: '', reason: '', document: null });
+      setMyLeaveForm({
+        type: 'sick',
+        startDate: '',
+        endDate: '',
+        reason: '',
+        document: null,
+        workingStartDate: '',
+        workingEndDate: ''
+      });
       fetchMyLeaves();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1439,8 +1503,50 @@ function HrDashboard() {
               <option value="casual">Casual Leave</option>
               <option value="paid">Planned Leave</option>
               <option value="work_from_home">Work From Home</option>
+              <option value="comp_off">Comp off</option>
             </select>
           </div>
+
+          {myLeaveForm.startDate && myLeaveForm.endDate && (
+            <div className="md:col-span-2 flex flex-col gap-1 px-1">
+              <p className="text-sm text-indigo-600 font-semibold">
+                Selection: {calculateLeaveDays(myLeaveForm.startDate, myLeaveForm.endDate, true)} {calculateLeaveDays(myLeaveForm.startDate, myLeaveForm.endDate, true) === 1 ? 'day' : 'days'}
+              </p>
+              <p className="text-[11px] text-gray-500 italic">
+                Net Leave Days: {calculateLeaveDays(myLeaveForm.startDate, myLeaveForm.endDate)} (Excluding holidays)
+              </p>
+            </div>
+          )}
+
+          {myLeaveForm.type === 'comp_off' && (
+            <div className="md:col-span-1 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+              <p className="text-xs text-indigo-700 font-semibold mb-2">Comp Off Working Period</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-indigo-600 uppercase mb-1">Working Start</label>
+                  <input
+                    type="date"
+                    value={myLeaveForm.workingStartDate}
+                    onChange={(e) => handleMyLeaveFormChange('workingStartDate', e.target.value)}
+                    className="w-full border border-indigo-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-indigo-600 uppercase mb-1">Working End</label>
+                  <input
+                    type="date"
+                    min={myLeaveForm.workingStartDate}
+                    value={myLeaveForm.workingEndDate}
+                    onChange={(e) => handleMyLeaveFormChange('workingEndDate', e.target.value)}
+                    className="w-full border border-indigo-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] mt-1 text-indigo-500 font-medium">
+                Total Working Days: {calculateLeaveDays(myLeaveForm.workingStartDate, myLeaveForm.workingEndDate, true)}
+              </p>
+            </div>
+          )}
 
           <div />
 

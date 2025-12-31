@@ -2,7 +2,7 @@
 import db from '../db/db.js';
 import { comparePassword, hashPassword } from '../utils/hash.js';
 import { generateToken, getExpiryDate } from '../utils/token.js';
-import { logAudit, createNotification } from '../utils/audit.js';
+import { logAudit, createNotification, broadcastNotification } from '../utils/audit.js';
 import ExcelJS from 'exceljs';
 
 const formatDate = (dateValue) => {
@@ -438,7 +438,8 @@ export async function getLeaveStatistics(req, res) {
       casual: 0,
       sick: 0,
       emergency: 0,
-      work_from_home: 0
+      work_from_home: 0,
+      comp_off: 0
     };
 
     stats.forEach(stat => {
@@ -453,7 +454,8 @@ export async function getLeaveStatistics(req, res) {
       casualLeave: leaveCounts.casual,
       sickLeave: leaveCounts.sick,
       emergencyLeave: leaveCounts.emergency,
-      wfhLeave: leaveCounts.work_from_home
+      wfhLeave: leaveCounts.work_from_home,
+      compOffLeave: leaveCounts.comp_off
     });
   } catch (error) {
     console.error('Leave statistics error:', error);
@@ -465,7 +467,7 @@ export async function approveLeaveRequest(req, res) {
   try {
     // Check if the user whose leave is being processed is an HR
     const [leaveRequest] = await db.execute(
-      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
+      `SELECT lr.user_id, lr.type, lr.start_date, lr.end_date, lr.working_start_date, lr.working_end_date, e.role, e.name, e.manager_id, e.department FROM leave_requests lr 
        JOIN employees e ON lr.user_id = e.id 
        WHERE lr.id = ?`,
       [req.params.id]
@@ -475,7 +477,7 @@ export async function approveLeaveRequest(req, res) {
       return res.status(404).json({ error: 'Leave request not found' });
     }
 
-    const { user_id, type, start_date, end_date, role: requesterRole, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
+    const { user_id, type, start_date, end_date, working_start_date, working_end_date, role: requesterRole, name: applicantName, manager_id: applicantManagerId, department: applicantDepartment } = leaveRequest[0];
 
     // If requester is HR (or Admin), ONLY Admin can approve
     if (requesterRole === 'hr' || requesterRole === 'admin') {
@@ -486,10 +488,9 @@ export async function approveLeaveRequest(req, res) {
 
     await db.execute('UPDATE leave_requests SET status="approved", reviewed_by=? WHERE id=?', [req.user.id, req.params.id]);
 
-    // Send Notification to requester
-    await createNotification(
-      user_id,
-      `Your ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
+    // Broadcast Notification to all staff
+    await broadcastNotification(
+      `${applicantName}'s ${type} leave request from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
     );
 
     // Log audit
@@ -499,31 +500,26 @@ export async function approveLeaveRequest(req, res) {
     });
 
     // Auto-mark attendance if Work From Home
-    if (type === 'work_from_home') {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
+    if (type === 'work_from_home' || type === 'comp_off') {
+      const isCompOff = type === 'comp_off';
+      const start = isCompOff ? new Date(working_start_date) : new Date(start_date);
+      const end = isCompOff ? new Date(working_end_date) : new Date(end_date);
+      const statusValue = isCompOff ? 'comp_off' : 'remote';
 
       // Loop through dates
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        // Skip weekends? Maybe WFH is allowed on weekends if applied? 
-        // User didn't specify, but usually "attendance" implies working days.
-        // However, if they requested leave for a date and it was approved, we should mark it.
-        // But we have weekend restrictions on applying, so likely won't be weekend.
+        // Normalize to noon to avoid timezone shifts when calling toISOString
+        const tempDate = new Date(d);
+        tempDate.setHours(12, 0, 0, 0);
+        const dateStr = tempDate.toISOString().split('T')[0];
 
-        const dateStr = d.toISOString().split('T')[0];
-
-        // Insert remote attendance, ignore if exists
+        // Insert attendance, ignore if exists
         try {
           await db.execute(
             `INSERT IGNORE INTO attendance (user_id, attendance_date, status, check_in_time, check_out_time, created_at)
-             VALUES (?, ?, 'remote', '10:00:00', '19:00:00', NOW())`,
-            [user_id, dateStr]
+             VALUES (?, ?, ?, '10:00:00', '19:00:00', NOW())`,
+            [user_id, dateStr, statusValue]
           );
-          // Also add work_hours entry? 
-          // If 'remote', they are working. Let's assume 10-7 (9 hours)
-          // But wait, attendance table has status 'remote'. 
-          // Does the system calculate hours from attendance or work_hours table?
-          // getAttendance uses work_hours JOIN. So we should probably insert into work_hours too.
 
           // Fetch the ID of the inserted/existing attendance
           const [attRows] = await db.execute('SELECT id FROM attendance WHERE user_id=? AND attendance_date=?', [user_id, dateStr]);
@@ -535,15 +531,14 @@ export async function approveLeaveRequest(req, res) {
               [user_id, attId, dateStr]
             );
 
-            await logAudit(req.user.id, 'wfh_attendance_auto_marked', {
+            await logAudit(req.user.id, `${type}_attendance_auto_marked`, {
               employee_id: user_id,
               date: dateStr,
-              leave_type: 'work_from_home'
+              leave_type: type
             });
           }
         } catch (err) {
-          console.error(`Failed to auto-mark WFH attendance for ${dateStr}:`, err);
-          // Continue loop
+          console.error(`Failed to auto-mark ${type} attendance for ${dateStr}:`, err);
         }
       }
     }
@@ -593,10 +588,10 @@ export async function createAdminLeave(req, res) {
     );
 
     // 3. Broadcast Notification to ALL active employees
-    // We can do this with a single INSERT ... SELECT query for efficiency
-    const message = `Admin ${req.user.name || 'Administrator'} is on leave from ${formatDate(start)} to ${formatDate(end)}.`;
+    const broadcastMsg = `Admin ${req.user.name || 'Administrator'} is on leave from ${formatDate(startDate)} to ${formatDate(endDate)}.`;
+    await broadcastNotification(broadcastMsg);
 
-    // 3. Log Audit
+    // 4. Log Audit
     await logAudit(adminId, 'admin_leave_broadcast', {
       leave_id: result.insertId,
       start_date: startDate,
@@ -758,6 +753,13 @@ export async function createApprovedLeave(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Fetch employee name
+    const [empRows] = await db.execute('SELECT name FROM employees WHERE id = ?', [employeeId]);
+    if (empRows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const employeeName = empRows[0].name;
+
     // Insert as approved immediately
     // reviewed_by = req.user.id (the HR who added it)
     await db.execute(
@@ -766,11 +768,10 @@ export async function createApprovedLeave(req, res) {
       [employeeId, leaveType, start_date, end_date, reason, req.user.id]
     );
 
-    // 4. Individual Notification
+    // 4. Broadcast Notification to all staff
     const typeLabel = leaveType.charAt(0).toUpperCase() + leaveType.slice(1);
-    await createNotification(
-      employeeId,
-      `HR has added a ${typeLabel} Leave record for you from ${start_date} to ${end_date}.`
+    await broadcastNotification(
+      `${employeeName}'s ${leaveType} leave (added by HR) from ${formatDate(start_date)} to ${formatDate(end_date)} has been approved.`
     );
 
     // Audit log
