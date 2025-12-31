@@ -192,7 +192,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_policies (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL,
+        type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         carry_forward TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -202,7 +202,7 @@ async function migrate() {
 
     // Migration: Update ENUMs for Work From Home (leave_policies)
     try {
-      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL");
+      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
     } catch (err) {
       console.log('Note: leave_policies ENUM update skipped or failed:', err.message);
     }
@@ -245,7 +245,7 @@ async function migrate() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         attendance_date DATE NOT NULL,
-        status ENUM('present', 'absent', 'remote', 'leave') NOT NULL DEFAULT 'present',
+        status ENUM('present', 'absent', 'remote', 'leave', 'comp_off') NOT NULL DEFAULT 'present',
         check_in_time TIME,
         check_out_time TIME,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -302,13 +302,15 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL,
+        type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
         days INT DEFAULT 0,
         reason TEXT,
         document_url VARCHAR(500),
         status ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+        working_start_date DATE,
+        working_end_date DATE,
         reviewed_by INT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES employees(id) ON DELETE CASCADE,
@@ -323,7 +325,9 @@ async function migrate() {
     try {
       const leaveCols = [
         { name: 'document_url', type: 'VARCHAR(500)' },
-        { name: 'days', type: 'INT DEFAULT 0' }
+        { name: 'days', type: 'INT DEFAULT 0' },
+        { name: 'working_start_date', type: 'DATE' },
+        { name: 'working_end_date', type: 'DATE' }
       ];
 
       for (const col of leaveCols) {
@@ -363,7 +367,7 @@ async function migrate() {
       CREATE TABLE IF NOT EXISTS leave_balances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
-        leave_type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL,
+        leave_type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL,
         total_days INT NOT NULL DEFAULT 05,
         used_days INT NOT NULL DEFAULT 0,
         remaining_days INT NOT NULL DEFAULT 0,
@@ -380,12 +384,24 @@ async function migrate() {
     // Migration: Update ENUMs for Work From Home
     try {
       console.log('Running WFH ENUM migration...');
-      await connection.execute("ALTER TABLE leave_requests MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL");
-      await connection.execute("ALTER TABLE leave_balances MODIFY COLUMN leave_type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL");
-      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency') NOT NULL");
+      await connection.execute("ALTER TABLE leave_requests MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
+      await connection.execute("ALTER TABLE leave_balances MODIFY COLUMN leave_type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
+      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
       console.log('✓ Updated ENUMs for Work From Home');
     } catch (err) {
       console.log('Note: WFH ENUM update skipped or failed (might already exist):', err.message);
+    }
+
+    // Migration: Update ENUMs for Comp Off
+    try {
+      console.log('Running Comp Off schema migration...');
+      await connection.execute("ALTER TABLE leave_requests MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
+      await connection.execute("ALTER TABLE leave_balances MODIFY COLUMN leave_type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
+      await connection.execute("ALTER TABLE leave_policies MODIFY COLUMN type ENUM('sick', 'casual', 'paid', 'work_from_home', 'emergency', 'comp_off') NOT NULL");
+      await connection.execute("ALTER TABLE attendance MODIFY COLUMN status ENUM('present', 'absent', 'remote', 'leave', 'comp_off') NOT NULL DEFAULT 'present'");
+      console.log('✓ Updated ENUMs for Comp Off');
+    } catch (err) {
+      console.log('Note: Comp Off ENUM update skipped or failed:', err.message);
     }
 
 
