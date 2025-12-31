@@ -821,10 +821,47 @@ export async function getHrAnalytics(req, res) {
       GROUP BY e.department
     `, [start, end]);
 
+    // Fetch employee-wise leave usage and policies
+    // This query joins employees with their leave requests (approved for the current year)
+    // and calculates used vs policy total for each type.
+    const [employeeLeaveStats] = await db.execute(`
+      SELECT 
+        e.id, 
+        e.name, 
+        e.role, 
+        e.department,
+        SUM(CASE WHEN lr.type = 'sick' AND lr.status = 'approved' AND YEAR(lr.start_date) = YEAR(CURDATE()) THEN lr.days ELSE 0 END) AS sick_used,
+        SUM(CASE WHEN lr.type = 'casual' AND lr.status = 'approved' AND YEAR(lr.start_date) = YEAR(CURDATE()) THEN lr.days ELSE 0 END) AS casual_used,
+        SUM(CASE WHEN lr.type = 'paid' AND lr.status = 'approved' AND YEAR(lr.start_date) = YEAR(CURDATE()) THEN lr.days ELSE 0 END) AS planned_used,
+        (SELECT total_days FROM leave_policies WHERE type = 'sick') AS sick_total,
+        (SELECT total_days FROM leave_policies WHERE type = 'casual') AS casual_total,
+        (SELECT total_days FROM leave_policies WHERE type = 'paid') AS planned_total
+      FROM employees e
+      LEFT JOIN leave_requests lr ON e.id = lr.user_id
+      GROUP BY e.id
+    `);
+
+    // Calculate "left" values for each employee
+    const processedStats = employeeLeaveStats.map(stat => {
+      const sickLeft = Math.max(0, (stat.sick_total || 0) - (stat.sick_used || 0));
+      const casualLeft = Math.max(0, (stat.casual_total || 0) - (stat.casual_used || 0));
+      const plannedLeft = Math.max(0, (stat.planned_total || 0) - (stat.planned_used || 0));
+      const totalLeft = sickLeft + casualLeft + plannedLeft;
+
+      return {
+        ...stat,
+        sick_left: sickLeft,
+        casual_left: casualLeft,
+        planned_left: plannedLeft,
+        total_left: totalLeft
+      };
+    });
+
     res.json({
       summary,
       departmentDistribution: deptStats,
       departmentLeaveDistribution: leaveDeptStats,
+      employeeLeaveStats: processedStats
     });
   } catch (error) {
     console.error(error);

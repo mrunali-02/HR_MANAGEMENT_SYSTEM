@@ -1066,7 +1066,7 @@ function HrDashboard() {
           <div className="text-4xl font-extrabold text-primary mt-2">{dashboardSummary?.totals?.absentToday || 0}</div>
         </div>
 
-        <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
+        {/*} <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
           <div className="text-sm font-semibold text-secondary uppercase tracking-wider mb-2">Your Leave Balance</div>
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center">
@@ -1082,7 +1082,7 @@ function HrDashboard() {
               <div className="text-xs text-secondary">Planned ({myLeavePolicies.paid})</div>
             </div>
           </div>
-        </div>
+        </div>*/}
 
         <div className="bg-white border-l-4 border-[color:var(--status-pending)] p-6 rounded-xl shadow-sm card-hover">
           <div className="text-sm font-medium opacity-90 uppercase tracking-wider text-secondary">Pending Leaves</div>
@@ -1538,6 +1538,75 @@ function HrDashboard() {
           </div>
         </div>
 
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+            <span className="w-1.5 h-6 bg-indigo-600 rounded-full mr-3"></span>
+            Employee Leave Usage & Balances
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 border-y border-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Employee</th>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Sick (Used/Total)</th>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Casual (Used/Total)</th>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Planned (Used/Total)</th>
+                  <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Total Left</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(analytics?.employeeLeaveStats || []).map((emp) => (
+                  <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-gray-900">{emp.name}</span>
+                        <span className="text-xs text-gray-500 capitalize">{emp.role} • {emp.department}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-700">{emp.sick_used}/{emp.sick_total}</span>
+                        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-red-400 h-full rounded-full"
+                            style={{ width: `${Math.min(100, (emp.sick_used / (emp.sick_total || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-700">{emp.casual_used}/{emp.casual_total}</span>
+                        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-yellow-400 h-full rounded-full"
+                            style={{ width: `${Math.min(100, (emp.casual_used / (emp.casual_total || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-700">{emp.planned_used}/{emp.planned_total}</span>
+                        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-blue-400 h-full rounded-full"
+                            style={{ width: `${Math.min(100, (emp.planned_used / (emp.planned_total || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${emp.total_left > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {emp.total_left} Days
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
       </div>
     );
