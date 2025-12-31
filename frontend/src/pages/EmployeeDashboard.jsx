@@ -230,78 +230,132 @@ function EmployeeDashboard() {
       return;
     }
 
-    const confirmCheckIn = window.confirm('This will capture your current location for attendance. Proceed?');
+    // const success message
+    // setSuccess('Fetching location...');
+
+    const confirmCheckIn = window.confirm('Are you sure you want to mark your attendance for check-in?');
     if (!confirmCheckIn) return;
 
-    setSuccess('Fetching location...');
+    try {
+      const latitude = 0;
+      const longitude = 0;
+      const accuracy = 0;
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API_BASE_URL}/employee/${id}/attendance/mark`,
+        { latitude, longitude, accuracy },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Show message regardless of tab
+      setSuccess('Attendance marked successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+
+      setAttendanceMarked(true);
+      // Refresh data
+      const token2 = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token2}` };
+      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+      setAttendanceRecords(attRes.data.records || []);
+      setTodayAttendance(attRes.data.today || null);
+      setCheckoutMarked(!!attRes.data.today?.check_out);
+    } catch (err) {
+      console.error('Error marking attendance:', err);
+      let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
+
+      // Debug/Fix: If backend says "already marked", we might be out of sync. Refresh state.
+      if (errorMsg.includes('Attendance already marked')) {
         try {
-          const { latitude, longitude, accuracy } = position.coords;
-
-          const token = localStorage.getItem('token');
-          await axios.post(
-            `${API_BASE_URL}/employee/${id}/attendance/mark`,
-            { latitude, longitude, accuracy },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-
-
-          // Show message regardless of tab
-          setSuccess('Attendance marked successfully!');
-          setTimeout(() => setSuccess(''), 3000);
-
-          setAttendanceMarked(true);
-          // Refresh data
           const token2 = localStorage.getItem('token');
           const headers = { Authorization: `Bearer ${token2}` };
           const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
           setAttendanceRecords(attRes.data.records || []);
           setTodayAttendance(attRes.data.today || null);
+          setAttendanceMarked(attRes.data.today?.status === 'present');
           setCheckoutMarked(!!attRes.data.today?.check_out);
-        } catch (err) {
-          console.error('Error marking attendance:', err);
-          let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
-
-          // Debug/Fix: If backend says "already marked", we might be out of sync. Refresh state.
-          if (errorMsg.includes('Attendance already marked')) {
-            try {
-              const token2 = localStorage.getItem('token');
-              const headers = { Authorization: `Bearer ${token2}` };
-              const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
-              setAttendanceRecords(attRes.data.records || []);
-              setTodayAttendance(attRes.data.today || null);
-              setAttendanceMarked(attRes.data.today?.status === 'present');
-              setCheckoutMarked(!!attRes.data.today?.check_out);
-            } catch (refreshErr) {
-              console.error('Failed to sync state after error:', refreshErr);
-            }
-          }
-
-          if (err.response?.data?.distance) {
-            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
-          }
-
-          setError(errorMsg);
-          // Clear location fetching message if error occurs
-          if (success === 'Fetching location...') setSuccess('');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (refreshErr) {
+          console.error('Failed to sync state after error:', refreshErr);
         }
-      },
-      (geoError) => {
-        console.error('Geolocation error:', geoError);
-        let msg = 'Unable to retrieve location.';
-        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
-        else if (geoError.code === 2) msg = 'Location unavailable.';
-        else if (geoError.code === 3) msg = 'Location request timed out.';
+      }
 
-        setError(msg);
-        setSuccess('');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
-    );
+      if (err.response?.data?.distance) {
+        errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+      }
+
+      setError(errorMsg);
+      // Clear location fetching message if error occurs
+      if (success === 'Fetching location...') setSuccess('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // navigator.geolocation.getCurrentPosition(
+    //   async (position) => {
+    //     try {
+    //       const { latitude, longitude, accuracy } = position.coords;
+
+    //       const token = localStorage.getItem('token');
+    //       await axios.post(
+    //         `${API_BASE_URL}/employee/${id}/attendance/mark`,
+    //         { latitude, longitude, accuracy },
+    //         { headers: { Authorization: `Bearer ${token}` } }
+    //       );
+
+
+    //       // Show message regardless of tab
+    //       setSuccess('Attendance marked successfully!');
+    //       setTimeout(() => setSuccess(''), 3000);
+
+    //       setAttendanceMarked(true);
+    //       // Refresh data
+    //       const token2 = localStorage.getItem('token');
+    //       const headers = { Authorization: `Bearer ${token2}` };
+    //       const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+    //       setAttendanceRecords(attRes.data.records || []);
+    //       setTodayAttendance(attRes.data.today || null);
+    //       setCheckoutMarked(!!attRes.data.today?.check_out);
+    //     } catch (err) {
+    //       console.error('Error marking attendance:', err);
+    //       let errorMsg = err.response?.data?.error || 'Failed to mark attendance.';
+
+    //       // Debug/Fix: If backend says "already marked", we might be out of sync. Refresh state.
+    //       if (errorMsg.includes('Attendance already marked')) {
+    //         try {
+    //           const token2 = localStorage.getItem('token');
+    //           const headers = { Authorization: `Bearer ${token2}` };
+    //           const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+    //           setAttendanceRecords(attRes.data.records || []);
+    //           setTodayAttendance(attRes.data.today || null);
+    //           setAttendanceMarked(attRes.data.today?.status === 'present');
+    //           setCheckoutMarked(!!attRes.data.today?.check_out);
+    //         } catch (refreshErr) {
+    //           console.error('Failed to sync state after error:', refreshErr);
+    //         }
+    //       }
+
+    //       if (err.response?.data?.distance) {
+    //         errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+    //       }
+
+    //       setError(errorMsg);
+    //       // Clear location fetching message if error occurs
+    //       if (success === 'Fetching location...') setSuccess('');
+    //       window.scrollTo({ top: 0, behavior: 'smooth' });
+    //     }
+    //   },
+    //   (geoError) => {
+    //     console.error('Geolocation error:', geoError);
+    //     let msg = 'Unable to retrieve location.';
+    //     if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+    //     else if (geoError.code === 2) msg = 'Location unavailable.';
+    //     else if (geoError.code === 3) msg = 'Location request timed out.';
+
+    //     setError(msg);
+    //     setSuccess('');
+    //     window.scrollTo({ top: 0, behavior: 'smooth' });
+    //   },
+    //   { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+    // );
   };
 
   const handleCheckout = async () => {
@@ -318,57 +372,92 @@ function EmployeeDashboard() {
       return;
     }
 
-    const confirmCheckout = window.confirm('This will capture your current location for checkout. Proceed?');
+    // const success message
+    // setSuccess('Fetching location...');
+
+    const confirmCheckout = window.confirm('Are you sure you want to mark your attendance for check-out?');
     if (!confirmCheckout) return;
 
-    setSuccess('Fetching location...');
+    try {
+      const latitude = 0;
+      const longitude = 0;
+      const accuracy = 0;
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_BASE_URL}/employee/${id}/attendance/checkout`,
+        { latitude, longitude, accuracy },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude, accuracy } = position.coords;
-          const token = localStorage.getItem('token');
-          const response = await axios.post(
-            `${API_BASE_URL}/employee/${id}/attendance/checkout`,
-            { latitude, longitude, accuracy },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+      const hours = response.data.total_hours || '0';
+      setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
+      setTimeout(() => setSuccess(''), 5000);
 
-          const hours = response.data.total_hours || '0';
-          setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
-          setTimeout(() => setSuccess(''), 5000);
+      // Mark as checked out and refresh attendance
+      setCheckoutMarked(true);
+      const token2 = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token2}` };
+      const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+      setAttendanceRecords(attRes.data.records || []);
+      setTodayAttendance(attRes.data.today || null);
+    } catch (err) {
+      console.error('Error marking checkout:', err);
+      let errorMsg = err.response?.data?.error || 'Failed to mark checkout';
+      if (err.response?.data?.distance) {
+        errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+      }
 
-          // Mark as checked out and refresh attendance
-          setCheckoutMarked(true);
-          const token2 = localStorage.getItem('token');
-          const headers = { Authorization: `Bearer ${token2}` };
-          const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
-          setAttendanceRecords(attRes.data.records || []);
-          setTodayAttendance(attRes.data.today || null);
-        } catch (err) {
-          console.error('Error marking checkout:', err);
-          let errorMsg = err.response?.data?.error || 'Failed to mark checkout';
-          if (err.response?.data?.distance) {
-            errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
-          }
+      setError(errorMsg);
+      setSuccess('');
+      setTimeout(() => setError(''), 5000);
+    }
 
-          setError(errorMsg);
-          setSuccess('');
-          setTimeout(() => setError(''), 5000);
-        }
-      },
-      (geoError) => {
-        console.error('Geolocation error:', geoError);
-        let msg = 'Unable to retrieve location.';
-        if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
-        else if (geoError.code === 2) msg = 'Location unavailable.';
-        else if (geoError.code === 3) msg = 'Location request timed out.';
+    // navigator.geolocation.getCurrentPosition(
+    //   async (position) => {
+    //     try {
+    //       const { latitude, longitude, accuracy } = position.coords;
+    //       const token = localStorage.getItem('token');
+    //       const response = await axios.post(
+    //         `${API_BASE_URL}/employee/${id}/attendance/checkout`,
+    //         { latitude, longitude, accuracy },
+    //         { headers: { Authorization: `Bearer ${token}` } }
+    //       );
 
-        setError(msg);
-        setSuccess('');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
-    );
+    //       const hours = response.data.total_hours || '0';
+    //       setSuccess(`Checkout marked successfully! Worked ${hours} hours`);
+    //       setTimeout(() => setSuccess(''), 5000);
+
+    //       // Mark as checked out and refresh attendance
+    //       setCheckoutMarked(true);
+    //       const token2 = localStorage.getItem('token');
+    //       const headers = { Authorization: `Bearer ${token2}` };
+    //       const attRes = await axios.get(`${API_BASE_URL}/employee/${id}/attendance`, { headers });
+    //       setAttendanceRecords(attRes.data.records || []);
+    //       setTodayAttendance(attRes.data.today || null);
+    //     } catch (err) {
+    //       console.error('Error marking checkout:', err);
+    //       let errorMsg = err.response?.data?.error || 'Failed to mark checkout';
+    //       if (err.response?.data?.distance) {
+    //         errorMsg += ` (Distance: ${err.response.data.distance}m, Max: ${err.response.data.max_distance}m)`;
+    //       }
+
+    //       setError(errorMsg);
+    //       setSuccess('');
+    //       setTimeout(() => setError(''), 5000);
+    //     }
+    //   },
+    //   (geoError) => {
+    //     console.error('Geolocation error:', geoError);
+    //     let msg = 'Unable to retrieve location.';
+    //     if (geoError.code === 1) msg = 'Location permission denied. Please enable GPS.';
+    //     else if (geoError.code === 2) msg = 'Location unavailable.';
+    //     else if (geoError.code === 3) msg = 'Location request timed out.';
+
+    //     setError(msg);
+    //     setSuccess('');
+    //   },
+    //   { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+    // );
   };
 
   const handleCancelLeave = async (leaveId) => {
@@ -840,7 +929,7 @@ function EmployeeDashboard() {
                 </div>
 
                 {/* 2. Leave Balance */}
-                <div className="bg-white border-l-4 border-[color:var(--status-success)] rounded-xl p-5 shadow-sm card-hover h-full flex flex-col justify-between">
+                {/*<div className="bg-white border-l-4 border-[color:var(--status-success)] rounded-xl p-5 shadow-sm card-hover h-full flex flex-col justify-between">
                   <div>
                     <div className="text-sm uppercase tracking-wide text-secondary opacity-80">Leave Balance</div>
                     <div className="mt-2 text-3xl font-bold text-primary">
@@ -864,7 +953,7 @@ function EmployeeDashboard() {
                       <span className="text-sm">{leaveBalance.sick}/{leavePolicies.sick}</span>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* 3. Attendance Rate Card */}
                 <div className="bg-white border-l-4 border-[#3f4a59] p-6 rounded-xl shadow-sm h-full flex flex-col justify-between card-hover">

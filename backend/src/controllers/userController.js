@@ -238,20 +238,20 @@ export async function markAttendance(req, res) {
     let distance = null; // Declare distance here for logging accessibility
 
     // Only validate distance if NOT WFH and Office coords are set
-    if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
-      distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-      console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
+    // if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
+    //   distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+    //   console.log(`Attendance Check: User at ${latitude},${longitude}. Distance to office: ${distance}m. Max: ${MAX_DISTANCE}m`);
 
-      if (distance > MAX_DISTANCE) {
-        return res.status(400).json({
-          error: 'You must be within the permitted attendance zone.',
-          distance: Math.round(distance),
-          max_distance: MAX_DISTANCE
-        });
-      }
-    } else {
-      console.log('Attendance Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
-    }
+    //   if (distance > MAX_DISTANCE) {
+    //     return res.status(400).json({
+    //       error: 'You must be within the permitted attendance zone.',
+    //       distance: Math.round(distance),
+    //       max_distance: MAX_DISTANCE
+    //     });
+    //   }
+    // } else {
+    //   console.log('Attendance Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
+    // }
 
     await db.execute(
       `INSERT INTO attendance (
@@ -847,20 +847,20 @@ export async function markCheckout(req, res) {
     const isWfh = wfh.length > 0;
 
     // Only validate distance if NOT WFH and Office coords are set
-    if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
-      const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-      console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
+    // if (!isWfh && !isNaN(OFFICE_LAT) && !isNaN(OFFICE_LNG)) {
+    //   const distance = calculateDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+    //   console.log(`Checkout Check: User at ${latitude},${longitude}. Distance: ${distance}m. Max: ${MAX_DISTANCE}m`);
 
-      if (distance > MAX_DISTANCE) {
-        return res.status(400).json({
-          error: 'You must be within the permitted attendance zone to check out.',
-          distance: Math.round(distance),
-          max_distance: MAX_DISTANCE
-        });
-      }
-    } else {
-      console.log('Checkout Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
-    }
+    //   if (distance > MAX_DISTANCE) {
+    //     return res.status(400).json({
+    //       error: 'You must be within the permitted attendance zone to check out.',
+    //       distance: Math.round(distance),
+    //       max_distance: MAX_DISTANCE
+    //     });
+    //   }
+    // } else {
+    //   console.log('Checkout Check: Skipping geofence (WFH:', isWfh, 'Or Config Missing)');
+    // }
 
     const now = new Date();
     const nowTime = now.toTimeString().substring(0, 8);
